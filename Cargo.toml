@@ -5,6 +5,7 @@ authors = ["Syndim <im@syndim.org>"]
 edition = "2018"
 repository = "https://github.com/Syndim/actix-mqtt-client"
 description = "A MQTT client based on the actix framework"
+license = "MIT"
 
 [dependencies]
 actix = "0.8"
