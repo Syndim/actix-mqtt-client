@@ -3,28 +3,28 @@
 //! The `actix-mqtt-client` crate is a mqtt client based on the [actix](https://github.com/actix/actix) framework
 //!
 //! ## Basic usage and example
-//! 
+//!
 //! First, create 2 actix actors, one for receiving publish messages, the other one for receiving error messages from the client:
 //! ```rust
 //! pub struct ErrorActor;
-//! 
+//!
 //! impl actix::Actor for ErrorActor {
 //!     type Context = actix::Context<Self>;
 //! }
-//! 
+//!
 //! impl actix::Handler<ErrorMessage> for ErrorActor {
 //!     type Result = ();
 //!     fn handle(&mut self, error: ErrorMessage, _: &mut Self::Context) -> Self::Result {
 //!         log::error!("{}", error.0);
 //!     }
 //! }
-//! 
+//!
 //! pub struct MessageActor;
-//! 
+//!
 //! impl actix::Actor for MessageActor {
 //!     type Context = actix::Context<Self>;
 //! }
-//! 
+//!
 //! impl actix::Handler<PublishMessage> for MessageActor {
 //!     type Result = ();
 //!     fn handle(
@@ -41,7 +41,7 @@
 //!     }
 //! }
 //! ```
-//! 
+//!
 //! Then, connect to the server(using tokio) and use the read and write part of the stream along with the actors to create a [MqttClient](struct.MqttClient.html):
 //! ```rust
 //! System::run(|| {
@@ -64,7 +64,7 @@
 //!                 .and_then(|client| {
 //!                     log::info!("Subscribe");
 //!                     client
-//!                         .subscribe(String::from("topic"), mqtt::QualityOfService::Level2)
+//!                         .subscribe(String::from("topic"), QualityOfService::Level2)
 //!                         .map(|_| client)
 //!                 })
 //!                 .and_then(|client| {
@@ -72,7 +72,7 @@
 //!                     client
 //!                         .publish(
 //!                             String::from("topic"),
-//!                             mqtt::QualityOfService::Level0,
+//!                             QualityOfService::Level0,
 //!                             Vec::from("level0".as_bytes()),
 //!                         )
 //!                         .map(|_| client)
@@ -82,7 +82,7 @@
 //!                     client
 //!                         .publish(
 //!                             String::from("topic"),
-//!                             mqtt::QualityOfService::Level1,
+//!                             QualityOfService::Level1,
 //!                             Vec::from("level1".as_bytes()),
 //!                         )
 //!                         .map(|_| client)
@@ -92,7 +92,7 @@
 //!                     client
 //!                         .publish(
 //!                             String::from("topic"),
-//!                             mqtt::QualityOfService::Level2,
+//!                             QualityOfService::Level2,
 //!                             Vec::from("level2".as_bytes()),
 //!                         )
 //!                         .map(|_| client)
@@ -113,9 +113,9 @@ mod consts;
 mod errors;
 
 pub use actix;
-pub use tokio;
 pub use futures;
 pub use mqtt::QualityOfService;
+pub use tokio;
 
 pub use crate::actors::packets::PublishMessage;
 pub use crate::actors::ErrorMessage;
