@@ -2,6 +2,8 @@
 
 The `actix-mqtt-client` crate is a mqtt client based on the [actix](https://github.com/actix/actix) framework
 
+[![Build Status](https://travis-ci.org/Syndim/actix-mqtt-client.svg?branch=master)](https://travis-ci.org/Syndim/actix-mqtt-client)
+
 ## Basic usage and example
 
 First, create 2 actix actors, one for receiving publish messages, the other one for receiving error messages from the client:
