@@ -87,8 +87,13 @@ impl MqttClient {
         client
     }
 
+    /// Returns the name of the client
+    pub fn name(&self) -> &str {
+        &*self.client_name
+    }
+
     /// Perform the connect operation to the remote MQTT server
-    /// 
+    ///
     /// Note: This function can only be called once for each client, calling it the second time will return an error
     pub fn connect(&mut self) -> Box<dyn Future<Item = (), Error = IoError>> {
         if let Some(connect_addr) = self.conn_addr.take() {
