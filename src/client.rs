@@ -1,5 +1,6 @@
 use std::boxed::Box;
 use std::io::{Error as IoError, ErrorKind, Write};
+use std::sync::Arc;
 
 use actix::{Actor, Addr, MailboxError, Recipient};
 use futures::{future, Future};
@@ -59,8 +60,8 @@ pub struct MqttClient {
     unsub_addr: Option<Addr<UnsubscribeActor>>,
     stop_addr: Option<Addr<StopActor>>,
     disconnect_addr: Option<Addr<DisconnectActor>>,
-    client_name: String,
-    options: MqttOptions,
+    client_name: Arc<String>,
+    options: Option<MqttOptions>,
 }
 
 impl MqttClient {
@@ -80,8 +81,8 @@ impl MqttClient {
             unsub_addr: None,
             stop_addr: None,
             disconnect_addr: None,
-            client_name,
-            options,
+            client_name: Arc::new(client_name),
+            options: Some(options),
         };
         client.start_actors(reader, writer, message_recipient, error_recipient);
         client
@@ -96,12 +97,12 @@ impl MqttClient {
     ///
     /// Note: This function can only be called once for each client, calling it the second time will return an error
     pub fn connect(&mut self) -> Box<dyn Future<Item = (), Error = IoError>> {
-        if let Some(connect_addr) = self.conn_addr.take() {
+        if let (Some(connect_addr), Some(mut options)) = (self.conn_addr.take(), self.options.take()) {
             let future = connect_addr
                 .send(Connect {
-                    user_name: self.options.user_name.take(),
-                    password: self.options.password.take(),
-                    keep_alive: self.options.keep_alive.take(),
+                    user_name: options.user_name.take(),
+                    password: options.password.take(),
+                    keep_alive: options.keep_alive.take(),
                 })
                 .map_err(map_mailbox_error_to_io_error);
             Box::new(future)
@@ -280,7 +281,7 @@ impl MqttClient {
             send_recipient.clone(),
             connect_status_actor_addr.clone().recipient(),
             error_recipient.clone(),
-            self.client_name.clone(),
+            (&*self.client_name).clone(),
         )
         .start();
 
