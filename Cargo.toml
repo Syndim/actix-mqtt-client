@@ -1,6 +1,6 @@
 [package]
 name = "actix-mqtt-client"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Syndim <im@syndim.org>"]
 edition = "2018"
 repository = "https://github.com/Syndim/actix-mqtt-client"
@@ -13,7 +13,7 @@ mqtt-protocol = "0.7"
 log = "0.4"
 futures = "0.1"
 tokio = "0.1"
-lazy_static = "1.3"
+lazy_static = "1.4"
 rand = "0.7"
 
 [dev-dependencies]

@@ -57,6 +57,7 @@
 //!                         MqttOptions::default(),
 //!                         MessageActor.start().recipient(),
 //!                         ErrorActor.start().recipient(),
+//!                         None
 //!                     );
 //!                     log::info!("Connect");
 //!                     client.connect().map(|_| client)
@@ -118,7 +119,7 @@ pub use mqtt::QualityOfService;
 pub use tokio;
 
 pub use crate::actors::packets::PublishMessage;
-pub use crate::actors::ErrorMessage;
+pub use crate::actors::{ErrorMessage, StopMessage};
 pub use crate::client::{MqttClient, MqttOptions};
 
 #[cfg(test)]
@@ -189,6 +190,7 @@ mod tests {
                             MqttOptions::default(),
                             MessageActor.start().recipient(),
                             ErrorActor.start().recipient(),
+                            None,
                         );
                         log::info!("Connected");
                         client.connect().map(|_| client)

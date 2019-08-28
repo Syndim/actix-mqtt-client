@@ -27,7 +27,7 @@ use crate::actors::packets::subscribe::{Subscribe, SubscribeActor};
 use crate::actors::packets::unsuback::UnsubackActor;
 use crate::actors::packets::unsubscribe::{Unsubscribe, UnsubscribeActor};
 use crate::actors::packets::{PublishMessage, PublishPacketStatus};
-use crate::actors::ErrorMessage;
+use crate::actors::{ErrorMessage, StopMessage};
 use crate::consts::PING_INTERVAL;
 
 #[inline]
@@ -73,6 +73,7 @@ impl MqttClient {
         options: MqttOptions,
         message_recipient: Recipient<PublishMessage>,
         error_recipient: Recipient<ErrorMessage>,
+        stop_recipient: Option<Recipient<StopMessage>>,
     ) -> Self {
         let mut client = MqttClient {
             conn_addr: None,
@@ -84,7 +85,13 @@ impl MqttClient {
             client_name: Arc::new(client_name),
             options: Some(options),
         };
-        client.start_actors(reader, writer, message_recipient, error_recipient);
+        client.start_actors(
+            reader,
+            writer,
+            message_recipient,
+            error_recipient,
+            stop_recipient,
+        );
         client
     }
 
@@ -97,7 +104,9 @@ impl MqttClient {
     ///
     /// Note: This function can only be called once for each client, calling it the second time will return an error
     pub fn connect(&mut self) -> Box<dyn Future<Item = (), Error = IoError>> {
-        if let (Some(connect_addr), Some(mut options)) = (self.conn_addr.take(), self.options.take()) {
+        if let (Some(connect_addr), Some(mut options)) =
+            (self.conn_addr.take(), self.options.take())
+        {
             let future = connect_addr
                 .send(Connect {
                     user_name: options.user_name.take(),
@@ -177,12 +186,18 @@ impl MqttClient {
         writer: TWriter,
         publish_message_recipient: Recipient<PublishMessage>,
         error_recipient: Recipient<ErrorMessage>,
+        client_stop_recipient_option: Option<Recipient<StopMessage>>,
     ) {
         let send_recipient = SendActor::new(writer, error_recipient.clone())
             .start()
             .recipient();
 
         let stop_addr = StopActor::new().start();
+
+        if let Some(client_stop_recipient) = client_stop_recipient_option {
+            let _ = stop_addr.do_send(AddStopRecipient(client_stop_recipient));
+        }
+
         let stop_recipient = stop_addr.clone().recipient();
         let stop_recipient_container = stop_addr.clone().recipient();
 
