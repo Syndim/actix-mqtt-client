@@ -20,6 +20,7 @@ use tokio::timer::Delay;
 use crate::consts::{DELAY_BEFORE_SHUTDOWN, RESEND_DELAY};
 use crate::errors;
 
+/// The actix message indicating that the client is about to stop
 #[derive(Message)]
 pub struct StopMessage;
 
