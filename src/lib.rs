@@ -4,7 +4,7 @@
 //!
 //! ## Basic usage and example
 //!
-//! First, create 2 actix actors, one for receiving publish messages, the other one for receiving error messages from the client:
+//! First, create 2 actix actors, one for receiving publish messages, the other one for receiving error messages from the client, you can also create an optional actix actor for receiving the stop message:
 //! ```rust
 //! pub struct ErrorActor;
 //!
