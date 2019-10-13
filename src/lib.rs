@@ -100,7 +100,7 @@
 //!                 })
 //!                 .and_then(|client| {
 //!                     log::info!("Disconnect");
-//!                     client.disconnect()
+//!                     client.disconnect(false)
 //!                 })
 //!                 .map_err(|_| ()),
 //!         );
@@ -252,7 +252,7 @@ mod tests {
                     })
                     .and_then(|client| {
                         log::info!("Disconnect");
-                        client.disconnect()
+                        client.disconnect(false)
                     })
                     .map_err(|_| ()),
             );
@@ -337,6 +337,7 @@ mod random_test {
                             MqttOptions::default(),
                             MessageActor(sender).start().recipient(),
                             ErrorActor.start().recipient(),
+                            None,
                         );
                         log::info!("Connected");
                         client.connect().map(|_| client)

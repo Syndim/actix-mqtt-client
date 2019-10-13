@@ -169,10 +169,10 @@ impl MqttClient {
     }
 
     /// Disconnect from the server
-    pub fn disconnect(&self) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub fn disconnect(&self, force: bool) -> Box<dyn Future<Item = (), Error = IoError>> {
         if let Some(ref disconnect_addr) = self.disconnect_addr {
             let future = disconnect_addr
-                .send(Disconnect)
+                .send(Disconnect { force })
                 .map_err(map_mailbox_error_to_io_error);
             Box::new(future)
         } else {
@@ -200,6 +200,13 @@ impl MqttClient {
 
         let stop_recipient = stop_addr.clone().recipient();
         let stop_recipient_container = stop_addr.clone().recipient();
+
+        let disconnect_actor_addr = DisconnectActor::new(
+            send_recipient.clone(),
+            error_recipient.clone(),
+            stop_recipient.clone(),
+        )
+        .start();
 
         macro_rules! start_response_actor {
             ($addr_name:ident, $actor_name:ident, $status_recipient:ident) => {
@@ -229,14 +236,19 @@ impl MqttClient {
         }
 
         macro_rules! start_status_actor {
-            ($name:ident, $payload_type:ty) => {
-                let $name = PacketStatusActor::<$payload_type>::new()
+            ($name:ident, $payload_type:ty, $send_status_recipient:expr) => {
+                let $name = PacketStatusActor::<$payload_type>::new($send_status_recipient)
                     .start()
                     .recipient();
             };
         }
 
-        start_status_actor!(publish_status_recipient, PublishPacketStatus);
+        let send_status_recipient = disconnect_actor_addr.clone().recipient();
+        start_status_actor!(
+            publish_status_recipient,
+            PublishPacketStatus,
+            Some(send_status_recipient)
+        );
 
         start_send_actor!(
             send_pub_actor_addr,
@@ -258,7 +270,7 @@ impl MqttClient {
         start_send_actor!(pubrel_actor_addr, PubrelActor, publish_status_recipient);
         start_response_actor!(pubcomp_actor_addr, PubcompActor, publish_status_recipient);
 
-        start_status_actor!(ping_status_recipient, ());
+        start_status_actor!(ping_status_recipient, (), None);
         let send_ping_actor_addr = PingreqActor::new(
             ping_status_recipient.clone(),
             send_recipient.clone(),
@@ -271,7 +283,7 @@ impl MqttClient {
             .do_send(AddStopRecipient(send_ping_actor_addr.clone().recipient()));
         start_response_actor!(pingresp_actor_addr, PingrespActor, ping_status_recipient);
 
-        start_status_actor!(subscribe_status_recipient, ());
+        start_status_actor!(subscribe_status_recipient, (), None);
         start_send_actor!(
             subscribe_actor_addr,
             SubscribeActor,
@@ -279,7 +291,7 @@ impl MqttClient {
         );
         start_response_actor!(suback_actor_addr, SubackActor, subscribe_status_recipient);
 
-        start_status_actor!(unsubscribe_status_recipient, ());
+        start_status_actor!(unsubscribe_status_recipient, (), None);
         start_send_actor!(
             unsubscribe_actor_addr,
             UnsubscribeActor,
@@ -291,7 +303,7 @@ impl MqttClient {
             unsubscribe_status_recipient
         );
 
-        let connect_status_actor_addr = PacketStatusActor::new().start();
+        let connect_status_actor_addr = PacketStatusActor::new(None).start();
         let connect_actor_addr = ConnectActor::new(
             send_recipient.clone(),
             connect_status_actor_addr.clone().recipient(),
@@ -304,13 +316,6 @@ impl MqttClient {
             connect_status_actor_addr.recipient(),
             error_recipient.clone(),
             connect_actor_addr.clone().recipient(),
-            stop_recipient.clone(),
-        )
-        .start();
-
-        let disconnect_actor_addr = DisconnectActor::new(
-            send_recipient,
-            error_recipient.clone(),
             stop_recipient.clone(),
         )
         .start();

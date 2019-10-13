@@ -1,6 +1,6 @@
 [package]
 name = "actix-mqtt-client"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Syndim <im@syndim.org>"]
 edition = "2018"
 repository = "https://github.com/Syndim/actix-mqtt-client"
