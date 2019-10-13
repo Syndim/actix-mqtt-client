@@ -98,7 +98,7 @@
 //!                         )
 //!                         .map(|_| client)
 //!                 })
-//!                 .and_then(|client| {
+//!                 .and_then(|mut client| {
 //!                     log::info!("Disconnect");
 //!                     client.disconnect(false)
 //!                 })
@@ -250,9 +250,17 @@ mod tests {
                             .map(|_| client)
                             .map_err(|e| IoError::new(ErrorKind::Other, format!("{}", e)))
                     })
-                    .and_then(|client| {
+                    .and_then(|mut client| {
                         log::info!("Disconnect");
-                        client.disconnect(false)
+                        client.disconnect(false).map(|_| client)
+                    })
+                    .and_then(|client| {
+                        log::info!("Check if disconnect is successful");
+                        Ok(client.is_disconnected())
+                    })
+                    .and_then(|is_disconnected| {
+                        assert_eq!(true, is_disconnected);
+                        Ok(())
                     })
                     .map_err(|_| ()),
             );

@@ -169,14 +169,36 @@ impl MqttClient {
     }
 
     /// Disconnect from the server
-    pub fn disconnect(&self, force: bool) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub fn disconnect(&mut self, force: bool) -> Box<dyn Future<Item = (), Error = IoError>> {
         if let Some(ref disconnect_addr) = self.disconnect_addr {
             let future = disconnect_addr
                 .send(Disconnect { force })
                 .map_err(map_mailbox_error_to_io_error);
+            self.clear_all_addrs(force);
             Box::new(future)
         } else {
             Box::new(future::err(address_not_found_error("disconnect")))
+        }
+    }
+
+    /// Check if the client has been disconnect from the server, useful to check whether disconnect is success
+    pub fn is_disconnected(&self) -> bool {
+        if let Some(ref disconnect_addr) = self.disconnect_addr {
+            !disconnect_addr.connected()
+        } else {
+            true
+        }
+    }
+
+    /// Set all addrs to None to prevent further operations
+    fn clear_all_addrs(&mut self, include_disconnect: bool) {
+        self.pub_addr = None;
+        self.sub_addr = None;
+        self.unsub_addr = None;
+        self.conn_addr = None;
+
+        if include_disconnect {
+            self.disconnect_addr = None;
         }
     }
 
