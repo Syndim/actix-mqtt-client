@@ -16,7 +16,7 @@ use crate::actors::{
     handle_mailbox_error_with_resend, handle_send_error, handle_send_error_with_resend,
     ErrorMessage, StopMessage,
 };
-use crate::consts::COMMAND_TIMEOUT;
+use crate::consts::{COMMAND_TIMEOUT, MAILBOX_CAPACITY_FOR_PUBLISH};
 
 use super::{
     schedule_status_check, send_error, PacketMessage, PublishMessage, PublishPacketStatus,
@@ -94,7 +94,7 @@ impl SendPublishActor {
     }
 }
 
-impl_empty_actor!(SendPublishActor);
+impl_empty_actor!(SendPublishActor, MAILBOX_CAPACITY_FOR_PUBLISH);
 impl_stop_handler!(SendPublishActor);
 
 impl Handler<Publish> for SendPublishActor {
