@@ -102,7 +102,7 @@ System::run(|| {
             })
             .and_then(|client| {
                 log::info!("Disconnect");
-                client.disconnect()
+                client.disconnect(false)
             })
             .map_err(|_| ()),
     );
