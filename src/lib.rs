@@ -98,9 +98,9 @@
 //!                         )
 //!                         .map(|_| client)
 //!                 })
-//!                 .and_then(|client| {
+//!                 .and_then(|mut client| {
 //!                     log::info!("Disconnect");
-//!                     client.disconnect()
+//!                     client.disconnect(false)
 //!                 })
 //!                 .map_err(|_| ()),
 //!         );
@@ -250,9 +250,17 @@ mod tests {
                             .map(|_| client)
                             .map_err(|e| IoError::new(ErrorKind::Other, format!("{}", e)))
                     })
-                    .and_then(|client| {
+                    .and_then(|mut client| {
                         log::info!("Disconnect");
-                        client.disconnect()
+                        client.disconnect(false).map(|_| client)
+                    })
+                    .and_then(|client| {
+                        log::info!("Check if disconnect is successful");
+                        Ok(client.is_disconnected())
+                    })
+                    .and_then(|is_disconnected| {
+                        assert_eq!(true, is_disconnected);
+                        Ok(())
                     })
                     .map_err(|_| ()),
             );
@@ -337,6 +345,7 @@ mod random_test {
                             MqttOptions::default(),
                             MessageActor(sender).start().recipient(),
                             ErrorActor.start().recipient(),
+                            None,
                         );
                         log::info!("Connected");
                         client.connect().map(|_| client)
