@@ -181,7 +181,7 @@ impl MqttClient {
         }
     }
 
-    /// Check if the client has been disconnect from the server, useful to check whether disconnect is success
+    /// Check if the client has been disconnected from the server, useful to check whether disconnection is success
     pub fn is_disconnected(&self) -> bool {
         if let Some(ref disconnect_addr) = self.disconnect_addr {
             !disconnect_addr.connected()
