@@ -7,11 +7,13 @@ use crate::actors::{ErrorMessage, StopMessage};
 use super::{send_packet, VariablePacketMessage};
 
 #[derive(Message)]
+#[rtype(result = "()")]
 pub struct Disconnect {
     pub force: bool,
 }
 
 #[derive(Message)]
+#[rtype(result = "()")]
 pub struct PacketSendStatus {
     pub finished: bool,
 }
@@ -50,6 +52,7 @@ impl Handler<Disconnect> for DisconnectActor {
         if msg.force || self.packet_send_finished {
             let packet = VariablePacket::DisconnectPacket(DisconnectPacket::new());
             send_packet(
+                "DisconnectActor",
                 ctx,
                 &self.send_recipient,
                 &self.error_recipient,

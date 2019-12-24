@@ -1,11 +1,16 @@
-macro_rules! assert_valid_retry_time {
-    ($self:ident, $last_retry_time:expr, $id:expr) => {
-        if $last_retry_time > crate::consts::MAX_RETRY_TIME {
-            log::error!("Max retry time excceeded");
+macro_rules! assert_valid_retry_count {
+    ($name:expr, $self:ident, $last_retry_count:expr, $id:expr) => {
+        if $last_retry_count > crate::consts::MAX_RETRY_COUNT {
+            log::error!("Max retry count excceeded");
             if let Err(e) = $self.status_recipient.do_send(
                 crate::actors::actions::status::PacketStatusMessages::RemovePacketStatus($id),
             ) {
-                crate::actors::handle_send_error(e, &$self.error_recipient, &$self.stop_recipient);
+                crate::actors::handle_send_error(
+                    concat!(stringify!($name), ":status_recipient"),
+                    e,
+                    &$self.error_recipient,
+                    &$self.stop_recipient,
+                );
             }
 
             return;
@@ -61,6 +66,7 @@ macro_rules! impl_response_packet_actor {
                 log::info!(concat!("Handling message for ", stringify!($name)));
                 let id = $get_id_from_packet(&msg.packet);
                 crate::actors::packets::reset_packet_status(
+                    stringify!($name),
                     ctx,
                     &self.status_recipient,
                     &self.error_recipient,
@@ -85,7 +91,7 @@ macro_rules! get_retry_msg_func {
     ($name:ident, $msg_type: ty) => {
         fn $name(msg: $msg_type) -> $msg_type {
             let mut resend_msg = msg;
-            resend_msg.retry_time += 1;
+            resend_msg.retry_count += 1;
             resend_msg
         }
     };
@@ -126,26 +132,26 @@ macro_rules! define_send_packet_actor {
 }
 
 macro_rules! impl_send_packet_actor {
-    ($name:ident, $message:ty, $packet:ident, $get_retry_time_from_message:ident, $create_retry_msessage_from_message:ident, $create_packet_and_id_from_message:ident) => {
+    ($name:ident, $message:ty, $packet:ident, $get_retry_count_from_message:ident, $create_retry_msessage_from_message:ident, $create_packet_and_id_from_message:ident) => {
         impl_send_packet_actor!(
             $name,
             $message,
             $packet,
-            $get_retry_time_from_message,
+            $get_retry_count_from_message,
             $create_retry_msessage_from_message,
             $create_packet_and_id_from_message,
-            |id, retry_time| crate::actors::actions::status::PacketStatusMessages::SetPacketStatus(
+            |id, retry_count| crate::actors::actions::status::PacketStatusMessages::SetPacketStatus(
                 id,
                 crate::actors::actions::status::PacketStatus {
                     id,
-                    retry_time,
+                    retry_count,
                     payload: ()
                 }
             ),
             |status| status.is_some()
         );
     };
-    ($name:ident, $message:ty, $packet:ident, $get_retry_time_from_message:ident, $create_retry_msessage_from_message:ident, $create_packet_and_id_from_message:ident, $create_status_from_id_and_retry_time:expr, $status_check_func:expr) => {
+    ($name:ident, $message:ty, $packet:ident, $get_retry_count_from_message:ident, $create_retry_msessage_from_message:ident, $create_packet_and_id_from_message:ident, $create_status_from_id_and_retry_count:expr, $status_check_func:expr) => {
         impl_stop_handler!($name);
 
         impl actix::Handler<$message> for $name {
@@ -158,12 +164,13 @@ macro_rules! impl_send_packet_actor {
                 }
 
                 let (packet, id) = packet_and_id_option.unwrap();
-                let last_retry_time = $get_retry_time_from_message(&msg);
-                assert_valid_retry_time!(self, last_retry_time, id);
+                let last_retry_count = $get_retry_count_from_message(&msg);
+                assert_valid_retry_count!($name, self, last_retry_count, id);
 
                 let resend_msg = $create_retry_msessage_from_message(msg);
-                let status_msg = $create_status_from_id_and_retry_time(id, last_retry_time);
+                let status_msg = $create_status_from_id_and_retry_count(id, last_retry_count);
                 if !crate::actors::packets::set_packet_status(
+                    stringify!($name),
                     ctx,
                     &self.status_recipient,
                     &self.error_recipient,
@@ -175,6 +182,7 @@ macro_rules! impl_send_packet_actor {
                 }
 
                 if !crate::actors::packets::send_packet(
+                    stringify!($name),
                     ctx,
                     &self.send_recipient,
                     &self.error_recipient,

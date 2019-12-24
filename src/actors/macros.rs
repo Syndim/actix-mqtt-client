@@ -22,7 +22,7 @@ macro_rules! impl_generic_empty_actor {
         impl_generic_empty_actor!($name, crate::consts::DEFAULT_MAILBOX_CAPACITY);
     };
     ($name:ident, $mailbox_capacity:expr) => {
-        impl<T: 'static> actix::Actor for $name<T> {
+        impl<T: Unpin + 'static> actix::Actor for $name<T> {
             type Context = actix::Context<Self>;
             fn started(&mut self, ctx: &mut Self::Context) {
                 ctx.set_mailbox_capacity($mailbox_capacity);
@@ -56,7 +56,7 @@ macro_rules! impl_stop_handler {
 
 macro_rules! impl_generic_stop_handler {
     ($name:ident) => {
-        impl<T: 'static> actix::Handler<crate::actors::StopMessage> for $name<T> {
+        impl<T: Unpin + 'static> actix::Handler<crate::actors::StopMessage> for $name<T> {
             type Result = ();
 
             fn handle(

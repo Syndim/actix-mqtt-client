@@ -7,6 +7,7 @@ use crate::actors::StopMessage;
 use crate::consts::DELAY_BEFORE_SHUTDOWN;
 
 #[derive(Message)]
+#[rtype(result = "()")]
 pub struct AddStopRecipient(pub Recipient<StopMessage>);
 
 pub struct StopActor {
