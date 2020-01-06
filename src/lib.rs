@@ -114,7 +114,6 @@ mod actors;
 mod client;
 mod consts;
 mod errors;
-mod utils;
 
 pub use actix;
 pub use futures;

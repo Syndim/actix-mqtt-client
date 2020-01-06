@@ -8,10 +8,9 @@ use tokio::io::AsyncRead;
 
 use crate::actors::packets::VariablePacketMessage;
 use crate::actors::{send_error, ErrorMessage, StopMessage};
-use crate::utils::Stream;
 
 pub struct RecvActor<T: AsyncRead + Unpin> {
-    stream: Option<Stream<T>>,
+    stream: Option<T>,
     recipient: Recipient<VariablePacketMessage>,
     error_recipient: Recipient<ErrorMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -25,7 +24,7 @@ impl<T: AsyncRead + Unpin> RecvActor<T> {
         stop_recipient: Recipient<StopMessage>,
     ) -> Self {
         RecvActor {
-            stream: Some(Stream::new(stream)),
+            stream: Some(stream),
             recipient,
             error_recipient,
             stop_recipient,
