@@ -19,7 +19,6 @@ use std::vec::Vec;
 
 use actix::dev::ToEnvelope;
 use actix::{Actor, AsyncContext, Context, Handler, Message, Recipient};
-use futures::Future;
 use mqtt::packet::VariablePacket;
 
 use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
@@ -31,7 +30,7 @@ use super::{handle_mailbox_error_with_resend, handle_send_error_with_resend, sen
 #[derive(Clone)]
 pub struct PacketMessage<T: Clone> {
     pub packet: T,
-    pub retry_time: u16,
+    pub retry_count: u16,
 }
 
 impl<T: Clone> Message for PacketMessage<T> {
@@ -39,8 +38,8 @@ impl<T: Clone> Message for PacketMessage<T> {
 }
 
 impl<T: Clone> PacketMessage<T> {
-    pub fn new(packet: T, retry_time: u16) -> Self {
-        PacketMessage { packet, retry_time }
+    pub fn new(packet: T, retry_count: u16) -> Self {
+        PacketMessage { packet, retry_count }
     }
 }
 
@@ -48,6 +47,7 @@ pub type VariablePacketMessage = PacketMessage<VariablePacket>;
 
 /// The actix message containing the payload of a MQTT publish packet
 #[derive(Debug, Message, Clone)]
+#[rtype(result = "()")]
 pub struct PublishMessage {
     /// The packet identifier of the publish packet for QoS Level 1 and Level 2, or 0 for QoS Level 0
     pub id: u16,
@@ -88,15 +88,17 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
     let addr_clone = addr.clone();
     let msg_clone = retry_msg.clone();
     ctx.run_later(COMMAND_TIMEOUT.clone(), move |_, _| {
-        actix::Arbiter::spawn(
-            status_recipient
+        let status_future = async move {
+            let status_result = status_recipient
                 .send(crate::actors::actions::status::PacketStatusMessages::GetPacketStatus(id))
-                .map(move |status| {
+                .await;
+            match status_result {
+                Ok(status) => {
                     if status_check_func(&status) {
                         addr.do_send(retry_msg);
                     }
-                })
-                .map_err(move |e| {
+                }
+                Err(e) => {
                     handle_mailbox_error_with_resend(
                         e,
                         &error_recipient,
@@ -104,12 +106,16 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
                         addr_clone,
                         msg_clone,
                     );
-                }),
-        );
+                }
+            }
+        };
+
+        actix::Arbiter::spawn(status_future);
     });
 }
 
 fn set_packet_status<TActor, TMessage, TStatusPayload>(
+    tag: &str,
     ctx: &mut Context<TActor>,
     status_recipient: &Recipient<PacketStatusMessages<TStatusPayload>>,
     error_recipient: &Recipient<ErrorMessage>,
@@ -126,7 +132,7 @@ where
 {
     if let Err(e) = status_recipient.try_send(status) {
         let addr = ctx.address();
-        handle_send_error_with_resend(e, error_recipient, stop_recipient, addr, resend_msg);
+        handle_send_error_with_resend(tag, e, error_recipient, stop_recipient, addr, resend_msg);
         false
     } else {
         true
@@ -134,6 +140,7 @@ where
 }
 
 fn reset_packet_status<TActor, TMessage, TStatusPayload>(
+    tag: &str,
     ctx: &mut Context<TActor>,
     status_recipient: &Recipient<PacketStatusMessages<TStatusPayload>>,
     error_recipient: &Recipient<ErrorMessage>,
@@ -150,7 +157,7 @@ where
 {
     if let Err(e) = status_recipient.try_send(PacketStatusMessages::RemovePacketStatus(id)) {
         let addr = ctx.address();
-        handle_send_error_with_resend(e, error_recipient, stop_recipient, addr, resend_msg);
+        handle_send_error_with_resend(tag, e, error_recipient, stop_recipient, addr, resend_msg);
         false
     } else {
         true
@@ -158,6 +165,7 @@ where
 }
 
 fn send_packet<TActor, TMessage>(
+    tag: &str,
     ctx: &Context<TActor>,
     send_recipient: &Recipient<VariablePacketMessage>,
     error_recipient: &Recipient<ErrorMessage>,
@@ -174,7 +182,7 @@ where
     let message = VariablePacketMessage::new(packet, 0);
     if let Err(e) = send_recipient.try_send(message) {
         let addr = ctx.address();
-        handle_send_error_with_resend(e, error_recipient, stop_recipient, addr, resend_msg);
+        handle_send_error_with_resend(tag, e, error_recipient, stop_recipient, addr, resend_msg);
         false
     } else {
         true

@@ -1,11 +1,9 @@
-use std::boxed::Box;
-use std::io::{Error as IoError, ErrorKind, Write};
+use std::io::{Error as IoError, ErrorKind};
 use std::sync::Arc;
 
 use actix::{Actor, Addr, MailboxError, Recipient};
-use futures::{future, Future};
 use mqtt::QualityOfService;
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::actors::actions::dispatch::DispatchActor;
 use crate::actors::actions::recv::RecvActor;
@@ -66,7 +64,10 @@ pub struct MqttClient {
 
 impl MqttClient {
     /// Create a new MQTT client
-    pub fn new<TReader: AsyncRead + Send + 'static, TWriter: Write + Send + 'static>(
+    pub fn new<
+        TReader: AsyncRead + Send + 'static + Unpin,
+        TWriter: AsyncWrite + Send + 'static + Unpin,
+    >(
         reader: TReader,
         writer: TWriter,
         client_name: String,
@@ -103,81 +104,75 @@ impl MqttClient {
     /// Perform the connect operation to the remote MQTT server
     ///
     /// Note: This function can only be called once for each client, calling it the second time will return an error
-    pub fn connect(&mut self) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub async fn connect(&mut self) -> Result<(), IoError> {
         if let (Some(connect_addr), Some(mut options)) =
             (self.conn_addr.take(), self.options.take())
         {
-            let future = connect_addr
+            connect_addr
                 .send(Connect {
                     user_name: options.user_name.take(),
                     password: options.password.take(),
                     keep_alive: options.keep_alive.take(),
                 })
-                .map_err(map_mailbox_error_to_io_error);
-            Box::new(future)
+                .await
+                .map_err(map_mailbox_error_to_io_error)
         } else {
-            Box::new(future::err(IoError::new(
-                ErrorKind::AlreadyExists,
-                "Already connected",
-            )))
+            Err(IoError::new(ErrorKind::AlreadyExists, "Already connected"))
         }
     }
 
     /// Subscribe to the server with a topic and QoS
-    pub fn subscribe(
-        &self,
-        topic: String,
-        qos: QualityOfService,
-    ) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub async fn subscribe(&self, topic: String, qos: QualityOfService) -> Result<(), IoError> {
         if let Some(ref sub_addr) = self.sub_addr {
-            let future = sub_addr
+            sub_addr
                 .send(Subscribe::new(topic, qos))
-                .map_err(map_mailbox_error_to_io_error);
-            Box::new(future)
+                .await
+                .map_err(map_mailbox_error_to_io_error)
         } else {
-            Box::new(future::err(address_not_found_error("subscribe")))
+            Err(address_not_found_error("subscribe"))
         }
     }
 
     /// Unsubscribe from the server
-    pub fn unsubscribe(&self, topic: String) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub async fn unsubscribe(&self, topic: String) -> Result<(), IoError> {
         if let Some(ref unsub_addr) = self.unsub_addr {
-            let future = unsub_addr
+            unsub_addr
                 .send(Unsubscribe::new(topic))
-                .map_err(map_mailbox_error_to_io_error);
-            Box::new(future)
+                .await
+                .map_err(map_mailbox_error_to_io_error)
         } else {
-            Box::new(future::err(address_not_found_error("unsubscribe")))
+            Err(address_not_found_error("unsubscribe"))
         }
     }
 
     /// Publish a message
-    pub fn publish(
+    pub async fn publish(
         &self,
         topic: String,
         qos: QualityOfService,
         payload: Vec<u8>,
-    ) -> Box<dyn Future<Item = (), Error = IoError>> {
+    ) -> Result<(), IoError> {
         if let Some(ref pub_addr) = self.pub_addr {
-            let future = pub_addr
+            pub_addr
                 .send(Publish::new(topic, qos, payload))
-                .map_err(map_mailbox_error_to_io_error);
-            Box::new(future)
+                .await
+                .map_err(map_mailbox_error_to_io_error)
         } else {
-            Box::new(future::err(address_not_found_error("publish")))
+            Err(address_not_found_error("publish"))
         }
     }
 
     /// Disconnect from the server
-    pub fn disconnect(&mut self, force: bool) -> Box<dyn Future<Item = (), Error = IoError>> {
+    pub async fn disconnect(&mut self, force: bool) -> Result<(), IoError> {
         if let Some(ref disconnect_addr) = self.disconnect_addr {
-            let future = disconnect_addr
+            let result = disconnect_addr
                 .send(Disconnect { force })
+                .await
                 .map_err(map_mailbox_error_to_io_error);
             self.clear_all_addrs(force);
-            Box::new(future)
+            result
         } else {
-            Box::new(future::err(address_not_found_error("disconnect")))
+            Err(address_not_found_error("disconnect"))
         }
     }
 
@@ -202,7 +197,10 @@ impl MqttClient {
         }
     }
 
-    fn start_actors<TReader: AsyncRead + Send + 'static, TWriter: Write + Send + 'static>(
+    fn start_actors<
+        TReader: AsyncRead + Send + 'static + Unpin,
+        TWriter: AsyncWrite + Send + 'static + Unpin,
+    >(
         &mut self,
         reader: TReader,
         writer: TWriter,
@@ -210,10 +208,6 @@ impl MqttClient {
         error_recipient: Recipient<ErrorMessage>,
         client_stop_recipient_option: Option<Recipient<StopMessage>>,
     ) {
-        let send_recipient = SendActor::new(writer, error_recipient.clone())
-            .start()
-            .recipient();
-
         let stop_addr = StopActor::new().start();
 
         if let Some(client_stop_recipient) = client_stop_recipient_option {
@@ -222,6 +216,10 @@ impl MqttClient {
 
         let stop_recipient = stop_addr.clone().recipient();
         let stop_recipient_container = stop_addr.clone().recipient();
+
+        let send_recipient = SendActor::new(writer, error_recipient.clone(), stop_recipient.clone())
+            .start()
+            .recipient();
 
         let disconnect_actor_addr = DisconnectActor::new(
             send_recipient.clone(),

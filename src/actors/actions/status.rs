@@ -12,7 +12,7 @@ pub enum PacketStatusMessages<T> {
 
 pub struct PacketStatus<T> {
     pub id: u16,
-    pub retry_time: u16,
+    pub retry_count: u16,
     pub payload: T,
 }
 
@@ -37,7 +37,7 @@ impl<T> PacketStatusActor<T> {
 impl_generic_empty_actor!(PacketStatusActor);
 impl_generic_stop_handler!(PacketStatusActor);
 
-impl<T: 'static> Handler<PacketStatusMessages<T>> for PacketStatusActor<T> {
+impl<T: Unpin + 'static> Handler<PacketStatusMessages<T>> for PacketStatusActor<T> {
     type Result = Option<PacketStatus<T>>;
     fn handle(&mut self, msg: PacketStatusMessages<T>, _: &mut Self::Context) -> Self::Result {
         let result = match msg {

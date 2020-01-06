@@ -48,64 +48,66 @@ Then, connect to the server(using tokio) and use the read and write part of the 
 ```rust
 System::run(|| {
     let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
-    Arbiter::spawn(
-        TcpStream::connect(&socket_addr)
-            .and_then(|stream| {
-                let (r, w) = stream.split();
-                let mut client = MqttClient::new(
-                    r,
-                    w,
-                    String::from("mqtt_client"),
-                    MqttOptions::default(),
-                    MessageActor.start().recipient(),
-                    ErrorActor.start().recipient(),
-                    None
-                );
-                log::info!("Connect");
-                client.connect().map(|_| client)
-            })
-            .and_then(|client| {
-                log::info!("Subscribe");
-                client
-                    .subscribe(String::from("topic"), QualityOfService::Level2)
-                    .map(|_| client)
-            })
-            .and_then(|client| {
-                log::info!("Publish Level0");
-                client
-                    .publish(
-                        String::from("topic"),
-                        QualityOfService::Level0,
-                        Vec::from("level0".as_bytes()),
-                    )
-                    .map(|_| client)
-            })
-            .and_then(|client| {
-                log::info!("Publish Level1");
-                client
-                    .publish(
-                        String::from("topic"),
-                        QualityOfService::Level1,
-                        Vec::from("level1".as_bytes()),
-                    )
-                    .map(|_| client)
-            })
-            .and_then(|client| {
-                log::info!("Publish Level2");
-                client
-                    .publish(
-                        String::from("topic"),
-                        QualityOfService::Level2,
-                        Vec::from("level2".as_bytes()),
-                    )
-                    .map(|_| client)
-            })
-            .and_then(|client| {
-                log::info!("Disconnect");
-                client.disconnect(false)
-            })
-            .map_err(|_| ()),
-    );
+    let future = async move {
+        let result = async move {
+            let stream = TcpStream::connect(socket_addr).await?;
+            let (r, w) = split(stream);
+            log::info!("TCP connected");
+            let mut client = MqttClient::new(
+                r,
+                w,
+                String::from("test"),
+                MqttOptions::default(),
+                MessageActor.start().recipient(),
+                ErrorActor.start().recipient(),
+                None,
+            );
+            client.connect().await?;
+            log::info!("MQTT connected");
+            log::info!("Subscribe");
+            client
+                .subscribe(String::from("test"), mqtt::QualityOfService::Level2)
+                .await?;
+            log::info!("Publish");
+            client
+                .publish(
+                    String::from("test"),
+                    mqtt::QualityOfService::Level0,
+                    Vec::from("test".as_bytes()),
+                )
+                .await?;
+            log::info!("Wait for 10s");
+            let delay_time = Instant::now() + Duration::new(10, 0);
+            delay_until(delay_time).await;
+            client
+                .publish(
+                    String::from("test"),
+                    mqtt::QualityOfService::Level1,
+                    Vec::from("test2".as_bytes()),
+                )
+                .await?;
+            log::info!("Wait for 10s");
+            let delay_time = Instant::now() + Duration::new(10, 0);
+            delay_until(delay_time).await;
+            client
+                .publish(
+                    String::from("test"),
+                    mqtt::QualityOfService::Level2,
+                    Vec::from("test3".as_bytes()),
+                )
+                .await?;
+            log::info!("Wait for 10s");
+            let delay_time = Instant::now() + Duration::new(10, 0);
+            delay_until(delay_time).await;
+            log::info!("Disconnect");
+            client.disconnect(false).await?;
+            log::info!("Check if disconnect is successful");
+            Ok(assert_eq!(true, client.is_disconnected())) as Result<(), IoError>
+        }
+        .await;
+        result.unwrap()
+    };
+    Arbiter::spawn(future);
 })
 .unwrap();
 ```

@@ -60,7 +60,12 @@ impl Handler<VariablePacketMessage> for DispatchActor {
         macro_rules! send_message {
             ($target:ident, $msg: ident) => {
                 if let Err(e) = self.$target.try_send(PacketMessage::new($msg, 0)) {
-                    handle_send_error(e, &self.error_recipient, &self.stop_recipient);
+                    handle_send_error(
+                        concat!("DispatchActor:", stringify!($target)),
+                        e,
+                        &self.error_recipient,
+                        &self.stop_recipient,
+                    );
                 }
             };
         }

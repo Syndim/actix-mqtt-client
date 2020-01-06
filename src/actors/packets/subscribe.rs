@@ -8,6 +8,7 @@ pub use mqtt::{QualityOfService, TopicFilter};
 use crate::actors::utils;
 
 #[derive(Message, Clone)]
+#[rtype(result = "()")]
 pub struct Subscribe {
     topic: String,
     qos: QualityOfService,
@@ -20,27 +21,28 @@ impl Subscribe {
 }
 
 #[derive(Message, Clone)]
+#[rtype(result = "()")]
 pub struct BatchSubscribe {
     subscriptions: Vec<Subscribe>,
-    retry_time: u16,
+    retry_count: u16,
 }
 
 impl BatchSubscribe {
     pub fn new(subscriptions: Vec<Subscribe>) -> Self {
         BatchSubscribe {
             subscriptions,
-            retry_time: 0,
+            retry_count: 0,
         }
     }
 }
 
-fn get_retry_time_from_message(msg: &BatchSubscribe) -> u16 {
-    msg.retry_time
+fn get_retry_count_from_message(msg: &BatchSubscribe) -> u16 {
+    msg.retry_count
 }
 
 fn create_retry_message_from_message(msg: BatchSubscribe) -> BatchSubscribe {
     let mut retry_msg = msg;
-    retry_msg.retry_time += 1;
+    retry_msg.retry_count += 1;
     retry_msg
 }
 
@@ -75,7 +77,7 @@ impl_send_packet_actor!(
     SubscribeActor,
     BatchSubscribe,
     SubscribePacket,
-    get_retry_time_from_message,
+    get_retry_count_from_message,
     create_retry_message_from_message,
     create_packet_and_id_from_message
 );
