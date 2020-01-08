@@ -19,7 +19,7 @@ version = "0.2"
 features = ["tcp"]
 
 [dependencies.mqtt-protocol]
-git = "https://github.com/zonyitoo/mqtt-rs.git#8f45d33"
+version = "0.8"
 features = ["async"]
 
 [dev-dependencies]
