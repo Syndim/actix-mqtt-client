@@ -2,8 +2,8 @@ use std::io::ErrorKind;
 
 use actix::{Actor, ActorContext, Context as ActixContext, Handler, Recipient, StreamHandler};
 use futures::stream;
-use log::info;
-use mqtt::packet::{VariablePacket, VariablePacketError};
+use log::{error, info};
+use mqtt::packet::VariablePacket;
 use tokio::io::AsyncRead;
 
 use crate::actors::packets::VariablePacketMessage;
@@ -40,35 +40,14 @@ impl<T: AsyncRead + Unpin + 'static> Handler<StopMessage> for RecvActor<T> {
     }
 }
 
-impl<T: AsyncRead + Unpin + 'static> StreamHandler<Result<VariablePacket, VariablePacketError>>
-    for RecvActor<T>
-{
-    fn handle(
-        &mut self,
-        item: Result<VariablePacket, VariablePacketError>,
-        _ctx: &mut Self::Context,
-    ) {
-        info!("Got packet");
-        match item {
-            Ok(packet) => {
-                if let Err(e) = self
-                    .recipient
-                    .try_send(VariablePacketMessage::new(packet, 0))
-                {
-                    send_error(
-                        &self.error_recipient,
-                        ErrorKind::Interrupted,
-                        format!("Error when sending packet: {}", e),
-                    );
-                }
-            }
-            Err(e) => {
-                send_error(
-                    &self.error_recipient,
-                    ErrorKind::Interrupted,
-                    format!("Error when parsing packet: {}", e),
-                );
-            }
+impl<T: AsyncRead + Unpin + 'static> StreamHandler<VariablePacket> for RecvActor<T> {
+    fn handle(&mut self, item: VariablePacket, _ctx: &mut Self::Context) {
+        if let Err(e) = self.recipient.try_send(VariablePacketMessage::new(item, 0)) {
+            send_error(
+                &self.error_recipient,
+                ErrorKind::Interrupted,
+                format!("Error when sending packet: {}", e),
+            );
         }
     }
 }
@@ -79,10 +58,27 @@ impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
         info!("RecvActor started");
 
         if let Some(reader) = self.stream.take() {
-            let packet_stream = stream::unfold(reader, |mut r| {
-                async {
-                    let packet = VariablePacket::parse(&mut r).await;
-                    Some((packet, r))
+            let error_recipient = self.error_recipient.clone();
+            let stop_recipient = self.stop_recipient.clone();
+            let packet_stream = stream::unfold(reader, move |mut r| {
+                let error_recipient = error_recipient.clone();
+                let stop_recipient = stop_recipient.clone();
+                async move {
+                    let packet_result = VariablePacket::parse(&mut r).await;
+                    match packet_result {
+                        Ok(packet) => Some((packet, r)),
+                        Err(e) => {
+                            error!("Failed to parse packet: {}", e);
+                            send_error(
+                                &error_recipient,
+                                ErrorKind::Interrupted,
+                                format!("Error when parsing packet: {}", e),
+                            );
+                            let _ = stop_recipient.try_send(StopMessage);
+
+                            None
+                        }
+                    }
                 }
             });
             Self::add_stream(packet_stream, ctx);

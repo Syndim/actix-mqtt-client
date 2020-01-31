@@ -48,7 +48,8 @@ pub fn send_error<T: AsRef<str>>(
     message: T,
 ) {
     let error = io::Error::new(kind, message.as_ref());
-    let _ = error_recipient.do_send(ErrorMessage(error));
+    let send_result = error_recipient.try_send(ErrorMessage(error));
+    log::info!("Send result for error recipient: {:?}", send_result);
 }
 
 fn resend<TActor, TMessage>(addr: Addr<TActor>, msg: TMessage)

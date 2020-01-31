@@ -46,6 +46,18 @@ impl actix::Handler<PublishMessage> for MessageActor {
 
 Then, connect to the server(using tokio) and use the read and write part of the stream along with the actors to create a MqttClient:
 ```rust
+use std::io::Error as IoError;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::time::Duration;
+
+use actix::{Actor, Arbiter, System};
+use env_logger;
+use tokio::io::split;
+use tokio::net::TcpStream;
+use tokio::time::{delay_until, Instant};
+
+use actix_mqtt_client::client::{MqttClient, MqttOptions};
 System::run(|| {
     let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
     let future = async move {

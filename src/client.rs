@@ -342,7 +342,7 @@ impl MqttClient {
 
         let dispatch_actor_addr = DispatchActor::new(
             error_recipient.clone(),
-            stop_recipient,
+            stop_recipient.clone(),
             connack_actor_addr.recipient(),
             pingresp_actor_addr.recipient(),
             recv_pub_actor_addr.recipient(),
@@ -358,7 +358,7 @@ impl MqttClient {
             reader,
             dispatch_actor_addr.clone().recipient(),
             error_recipient,
-            stop_addr.clone().recipient(),
+            stop_recipient
         )
         .start();
         let _ = stop_addr.do_send(AddStopRecipient(recv_addr.recipient()));
