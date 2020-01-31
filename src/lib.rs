@@ -54,6 +54,7 @@
 //! use tokio::net::TcpStream;
 //! use tokio::time::{delay_until, Instant};
 //! use actix_mqtt_client::client::{MqttClient, MqttOptions};
+//! 
 //! System::run(|| {
 //!     let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
 //!     let future = async move {
