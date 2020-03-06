@@ -54,7 +54,7 @@
 //! use tokio::net::TcpStream;
 //! use tokio::time::{delay_until, Instant};
 //! use actix_mqtt_client::client::{MqttClient, MqttOptions};
-//! 
+//!
 //! System::run(|| {
 //!     let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
 //!     let future = async move {
@@ -302,6 +302,216 @@ mod random_test {
     }
 
     #[test]
+    fn test_random_publish_level0_cloned_client() {
+        use std::io::Error as IoError;
+        use std::net::SocketAddr;
+        use std::str::FromStr;
+        use std::time::Duration;
+
+        use actix::{Actor, Arbiter, System};
+        use env_logger;
+        use futures::stream::StreamExt;
+        use tokio::io::split;
+        use tokio::net::TcpStream;
+        use tokio::time::{delay_until, Instant};
+
+        use crate::client::{MqttClient, MqttOptions};
+
+        env_logger::init();
+
+        let (sender, recv) = channel(100);
+        System::run(|| {
+            let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
+            let future = async move {
+                let result = async move {
+                    let stream = TcpStream::connect(socket_addr).await?;
+                    let (r, w) = split(stream);
+                    let mut client = MqttClient::new(
+                        r,
+                        w,
+                        String::from("test"),
+                        MqttOptions::default(),
+                        MessageActor(sender.clone()).start().recipient(),
+                        ErrorActor.start().recipient(),
+                        None,
+                    );
+                    log::info!("Connected");
+                    client.connect().await?;
+                    log::info!("Subscribe");
+                    client
+                        .subscribe(String::from("test"), mqtt::QualityOfService::Level0)
+                        .await?;
+                    async fn random_send(
+                        client_id: i32,
+                        client: MqttClient,
+                        mut sender: Sender<(bool, Vec<u8>)>,
+                    ) {
+                        let mut count: i32 = 0;
+                        loop {
+                            count += 1;
+                            use rand::RngCore;
+                            let mut data = [0u8; 32];
+                            rand::thread_rng().fill_bytes(&mut data);
+                            let payload = Vec::from(&data[..]);
+                            log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
+                            delay_until(Instant::now() + Duration::from_millis(10)).await;
+                            sender.try_send((true, payload.clone())).unwrap();
+                            client
+                                .publish(
+                                    String::from("test"),
+                                    mqtt::QualityOfService::Level0,
+                                    payload,
+                                )
+                                .await
+                                .unwrap();
+                        }
+                    }
+
+                    for i in 0..5 {
+                        let client_clone = client.clone();
+                        let sender_clone = sender.clone();
+                        let future = random_send(i, client_clone, sender_clone);
+                        Arbiter::spawn(future);
+                    }
+
+                    Ok(()) as Result<(), IoError>
+                }
+                .await;
+                result.unwrap();
+            };
+
+            Arbiter::spawn(future);
+            let recv_future = async {
+                let result = async {
+                    recv.fold((), |_, (is_send, payload)| async move {
+                        let mut p = PACKETS.lock().unwrap();
+                        if is_send {
+                            p.insert(payload);
+                        } else if p.contains(&payload) {
+                            p.remove(&payload);
+                        }
+
+                        log::info!("Pending recv items: {}", p.len());
+
+                        ()
+                    })
+                    .await;
+                    Ok(()) as Result<(), IoError>
+                }
+                .await;
+                result.unwrap()
+            };
+            Arbiter::spawn(recv_future);
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_random_publish_level0_created_client() {
+        use std::io::Error as IoError;
+        use std::net::SocketAddr;
+        use std::str::FromStr;
+        use std::time::Duration;
+
+        use actix::{Actor, Arbiter, System};
+        use env_logger;
+        use futures::stream::StreamExt;
+        use tokio::io::split;
+        use tokio::net::TcpStream;
+        use tokio::time::{delay_until, Instant};
+
+        use crate::client::{MqttClient, MqttOptions};
+
+        env_logger::init();
+
+        async fn test_send(client_id: i32, sender: Sender<(bool, Vec<u8>)>) {
+            let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
+            async move {
+                let stream = TcpStream::connect(socket_addr).await?;
+                let (r, w) = split(stream);
+                let mut client = MqttClient::new(
+                    r,
+                    w,
+                    format!("test_{}", client_id),
+                    MqttOptions::default(),
+                    MessageActor(sender.clone()).start().recipient(),
+                    ErrorActor.start().recipient(),
+                    None,
+                );
+                log::info!("Connected");
+                client.connect().await?;
+                log::info!("Subscribe");
+                client
+                    .subscribe(String::from("test"), mqtt::QualityOfService::Level0)
+                    .await?;
+                async fn random_send(
+                    client_id: i32,
+                    client: MqttClient,
+                    mut sender: Sender<(bool, Vec<u8>)>,
+                ) {
+                    let mut count: i32 = 0;
+                    loop {
+                        count += 1;
+                        use rand::RngCore;
+                        let mut data = [0u8; 32];
+                        rand::thread_rng().fill_bytes(&mut data);
+                        let payload = Vec::from(&data[..]);
+                        log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
+                        delay_until(Instant::now() + Duration::from_millis(10)).await;
+                        sender.try_send((true, payload.clone())).unwrap();
+                        client
+                            .publish(
+                                String::from("test"),
+                                mqtt::QualityOfService::Level0,
+                                payload,
+                            )
+                            .await
+                            .unwrap();
+                    }
+                }
+
+                let future = random_send(client_id, client, sender);
+                Arbiter::spawn(future);
+
+                Ok(()) as Result<(), IoError>
+            }
+            .await
+            .unwrap();
+        }
+
+        System::run(|| {
+            let (sender, recv) = channel(100);
+            for i in 0..5 {
+                let future = test_send(i, sender.clone());
+                Arbiter::spawn(future);
+            }
+
+            let recv_future = async {
+                let result = async {
+                    recv.fold((), |_, (is_send, payload)| async move {
+                        let mut p = PACKETS.lock().unwrap();
+                        if is_send {
+                            p.insert(payload);
+                        } else if p.contains(&payload) {
+                            p.remove(&payload);
+                        }
+
+                        log::info!("Pending recv items: {}", p.len());
+
+                        ()
+                    })
+                    .await;
+                    Ok(()) as Result<(), IoError>
+                }
+                .await;
+                result.unwrap()
+            };
+            Arbiter::spawn(recv_future);
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn test_random_publish_level2() {
         use std::io::Error as IoError;
         use std::net::SocketAddr;
@@ -344,25 +554,23 @@ mod random_test {
                         .subscribe(String::from("test"), mqtt::QualityOfService::Level2)
                         .await?;
                     futures::stream::repeat(())
-                        .fold((client, sender_clone), |(client, mut sender), _| {
-                            async {
-                                use rand::RngCore;
-                                let mut data = [0u8; 32];
-                                rand::thread_rng().fill_bytes(&mut data);
-                                let payload = Vec::from(&data[..]);
-                                log::info!("Publish {:?}", payload);
-                                delay_until(Instant::now() + Duration::from_millis(10)).await;
-                                sender.try_send((true, payload.clone())).unwrap();
-                                client
-                                    .publish(
-                                        String::from("test"),
-                                        mqtt::QualityOfService::Level2,
-                                        payload,
-                                    )
-                                    .await
-                                    .unwrap();
-                                (client, sender)
-                            }
+                        .fold((client, sender_clone), |(client, mut sender), _| async {
+                            use rand::RngCore;
+                            let mut data = [0u8; 32];
+                            rand::thread_rng().fill_bytes(&mut data);
+                            let payload = Vec::from(&data[..]);
+                            log::info!("Publish {:?}", payload);
+                            delay_until(Instant::now() + Duration::from_millis(10)).await;
+                            sender.try_send((true, payload.clone())).unwrap();
+                            client
+                                .publish(
+                                    String::from("test"),
+                                    mqtt::QualityOfService::Level2,
+                                    payload,
+                                )
+                                .await
+                                .unwrap();
+                            (client, sender)
                         })
                         .await;
                     Ok(()) as Result<(), IoError>
@@ -373,21 +581,19 @@ mod random_test {
             Arbiter::spawn(future);
             let recv_future = async {
                 let result = async {
-                    recv.fold((), |_, (is_send, payload)| {
-                        async move {
-                            let mut p = PACKETS.lock().unwrap();
-                            if is_send {
-                                p.insert(payload);
-                            } else if !p.contains(&payload) {
-                                panic!("Multiple receive for level 2: {:?}", payload);
-                            } else {
-                                p.remove(&payload);
-                            }
-
-                            log::info!("Pending recv items: {}", p.len());
-
-                            ()
+                    recv.fold((), |_, (is_send, payload)| async move {
+                        let mut p = PACKETS.lock().unwrap();
+                        if is_send {
+                            p.insert(payload);
+                        } else if !p.contains(&payload) {
+                            panic!("Multiple receive for level 2: {:?}", payload);
+                        } else {
+                            p.remove(&payload);
                         }
+
+                        log::info!("Pending recv items: {}", p.len());
+
+                        ()
                     })
                     .await;
                     Ok(()) as Result<(), IoError>
