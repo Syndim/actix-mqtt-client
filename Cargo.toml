@@ -6,6 +6,7 @@ edition = "2018"
 repository = "https://github.com/Syndim/actix-mqtt-client"
 description = "A MQTT client based on the actix framework"
 license = "MIT"
+documentation = "https://docs.rs/actix-mqtt-client/"
 
 [dependencies]
 actix = "0.9"
