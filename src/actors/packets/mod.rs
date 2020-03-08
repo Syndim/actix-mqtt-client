@@ -39,7 +39,10 @@ impl<T: Clone> Message for PacketMessage<T> {
 
 impl<T: Clone> PacketMessage<T> {
     pub fn new(packet: T, retry_count: u16) -> Self {
-        PacketMessage { packet, retry_count }
+        PacketMessage {
+            packet,
+            retry_count,
+        }
     }
 }
 
@@ -100,6 +103,7 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
                 }
                 Err(e) => {
                     handle_mailbox_error_with_resend(
+                        "schedule_status_check",
                         e,
                         &error_recipient,
                         &stop_recipient,

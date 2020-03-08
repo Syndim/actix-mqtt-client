@@ -21,13 +21,18 @@ impl<T: 'static> Message for PacketStatusMessages<T> {
 }
 
 pub struct PacketStatusActor<T> {
+    name: &'static str,
     packet_status_map: HashMap<u16, PacketStatus<T>>,
     packet_send_status_recipient_option: Option<Recipient<PacketSendStatus>>,
 }
 
 impl<T> PacketStatusActor<T> {
-    pub fn new(packet_send_status_recipient_option: Option<Recipient<PacketSendStatus>>) -> Self {
+    pub fn new(
+        name: &'static str,
+        packet_send_status_recipient_option: Option<Recipient<PacketSendStatus>>,
+    ) -> Self {
         PacketStatusActor {
+            name,
             packet_status_map: HashMap::new(),
             packet_send_status_recipient_option,
         }

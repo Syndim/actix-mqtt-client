@@ -74,6 +74,13 @@ System::run(|| {
                 None,
             );
             client.connect().await?;
+
+            // Waiting for the client to be connected
+            while !client.is_connected().await? {
+                let delay_time = Instant::now() + Duration::new(1, 0);
+                delay_until(delay_time).await;
+            }
+
             log::info!("MQTT connected");
             log::info!("Subscribe");
             client

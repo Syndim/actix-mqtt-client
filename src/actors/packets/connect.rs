@@ -5,10 +5,9 @@ use log::info;
 use mqtt::packet::{ConnectPacket, VariablePacket};
 
 use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
-use crate::actors::{force_stop_system, send_error};
+use crate::actors::send_error;
 use crate::actors::{ErrorMessage, StopMessage};
 use crate::consts::{COMMAND_TIMEOUT, PROTOCOL_NAME};
-use crate::errors;
 
 use super::VariablePacketMessage;
 
@@ -23,6 +22,7 @@ pub struct Connect {
 pub struct ConnectActor {
     send_recipient: Recipient<VariablePacketMessage>,
     status_recipient: Recipient<PacketStatusMessages<()>>,
+    stop_recipient: Recipient<StopMessage>,
     error_recipient: Recipient<ErrorMessage>,
     client_name: String,
 }
@@ -31,12 +31,14 @@ impl ConnectActor {
     pub fn new(
         send_recipient: Recipient<VariablePacketMessage>,
         status_recipient: Recipient<PacketStatusMessages<()>>,
+        stop_recipient: Recipient<StopMessage>,
         error_recipient: Recipient<ErrorMessage>,
         client_name: String,
     ) -> Self {
         ConnectActor {
             send_recipient,
             status_recipient,
+            stop_recipient,
             error_recipient,
             client_name,
         }
@@ -50,6 +52,10 @@ impl Handler<Connect> for ConnectActor {
     type Result = ();
     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
         info!("Handle message for ConnectActor");
+
+        // For connect status:
+        //      status message with id = 0 indicating the connecing status
+        //      status message with id = 1 indicating the connected status
         if let Err(e) = self
             .status_recipient
             .do_send(PacketStatusMessages::SetPacketStatus(
@@ -62,11 +68,12 @@ impl Handler<Connect> for ConnectActor {
             ))
         {
             send_error(
+                "ConnectActor::status_recipient",
                 &self.error_recipient,
                 ErrorKind::Interrupted,
                 format!("Failed to set packet status: {}", e),
             );
-            force_stop_system(errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+            let _ = self.stop_recipient.do_send(StopMessage);
             return;
         }
 
@@ -83,14 +90,16 @@ impl Handler<Connect> for ConnectActor {
             .do_send(VariablePacketMessage::new(connect_variable_packet, 0))
         {
             send_error(
+                "ConnectActor::send_recipient",
                 &self.error_recipient,
                 ErrorKind::Interrupted,
                 format!("Failed to send connect packet: {}", e),
             );
-            force_stop_system(errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+            let _ = self.stop_recipient.do_send(StopMessage);
             return;
         }
 
+        let stop_recipient = self.stop_recipient.clone();
         ctx.run_later(COMMAND_TIMEOUT.clone(), |actor, ctx| {
             let addr = ctx.address();
             let error_recipient = actor.error_recipient.clone();
@@ -103,13 +112,12 @@ impl Handler<Connect> for ConnectActor {
                     Ok(status) => {
                         if status.is_some() {
                             send_error(
+                                "ConnectActor::status_recipient_ack",
                                 &error_recipient,
                                 ErrorKind::InvalidData,
                                 format!("Doesn't got connect ack from server, exit"),
                             );
-                            force_stop_system(
-                                errors::ERROR_CODE_FAILED_TO_RECV_RESPONSE_FROM_SERVER,
-                            );
+                            let _ = stop_recipient.do_send(StopMessage);
                         } else {
                             // Stop the connect actor
                             addr.do_send(StopMessage);
@@ -117,11 +125,12 @@ impl Handler<Connect> for ConnectActor {
                     }
                     Err(e) => {
                         send_error(
+                            "ConnectActor::status_recipient",
                             &error_recipient,
                             ErrorKind::InvalidData,
                             format!("Failed to check connect ack status: {}", e),
                         );
-                        force_stop_system(errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+                        let _ = stop_recipient.do_send(StopMessage);
                     }
                 }
             };

@@ -1,6 +1,6 @@
 use std::io::ErrorKind;
 
-use actix::{Addr, Arbiter, AsyncContext, Handler, Message, Recipient};
+use actix::{Addr, Arbiter, AsyncContext, Handler, MailboxError, Message, Recipient};
 use log::info;
 use mqtt::packet::{
     Packet, PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
@@ -61,6 +61,7 @@ fn create_packet_and_id_from_message(
         }
         Err(e) => {
             send_error(
+                "create_packet_and_id_from_message",
                 error_recipient,
                 ErrorKind::InvalidInput,
                 format!("Failed to create topic from {}, error: {}", &*msg.topic, e),
@@ -115,9 +116,10 @@ impl Handler<Publish> for SendPublishActor {
                 if let Err(e) = self.send_recipient.try_send(variable_message) {
                     handle_send_error(
                         "RecvPublishActor:send_recipient",
-                        e, 
-                        &self.error_recipient, 
-                        &self.stop_recipient);
+                        e,
+                        &self.error_recipient,
+                        &self.stop_recipient,
+                    );
                     return;
                 }
             }
@@ -228,6 +230,7 @@ impl Handler<Publish> for SendPublishActor {
                             }
                             Err(e) => {
                                 handle_mailbox_error_with_resend(
+                                    "SendPublishActor:status_recipient",
                                     e,
                                     &error_recipient,
                                     &stop_recipient,
@@ -288,15 +291,21 @@ impl RecvPublishActor {
                     }
                 }
             }
-            Err(e) => {
-                handle_mailbox_error_with_resend(
-                    e,
-                    &error_recipient,
-                    &stop_recipient,
-                    addr,
-                    resend_msg,
-                );
-            }
+            Err(e) => match e {
+                MailboxError::Closed => {
+                    info!("Status mailbox is closed, no need for status check phase 2");
+                }
+                _ => {
+                    handle_mailbox_error_with_resend(
+                        "check_status_phase_2",
+                        e,
+                        &error_recipient,
+                        &stop_recipient,
+                        addr,
+                        resend_msg,
+                    );
+                }
+            },
         }
     }
 
@@ -345,11 +354,21 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                     .status_recipient
                     .do_send(PacketStatusMessages::RemovePacketStatus(0))
                 {
-                    handle_send_error("RecvPublishActor:status_recipient", e, &self.error_recipient, &self.stop_recipient);
+                    handle_send_error(
+                        "RecvPublishActor:status_recipient",
+                        e,
+                        &self.error_recipient,
+                        &self.stop_recipient,
+                    );
                 }
 
                 if let Err(e) = self.remote_message_recipient.try_send(publish_message) {
-                    handle_send_error("RecvPublishActor:remote_message_recipient", e, &self.error_recipient, &self.stop_recipient);
+                    handle_send_error(
+                        "RecvPublishActor:remote_message_recipient",
+                        e,
+                        &self.error_recipient,
+                        &self.stop_recipient,
+                    );
                 }
             }
             QoSWithPacketIdentifier::Level1(id) => {
@@ -483,6 +502,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                         }
                         Err(e) => {
                             handle_mailbox_error_with_resend(
+                                "RecvPublishActor:status_recipient",
                                 e,
                                 &error_recipient_clone,
                                 &stop_recipient_clone,

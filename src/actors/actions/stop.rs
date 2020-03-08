@@ -1,10 +1,9 @@
 use std::vec::Vec;
 
-use actix::{ActorContext, AsyncContext, Handler, Message, Recipient, System};
+use actix::{ActorContext, Handler, Message, Recipient};
 use log::info;
 
 use crate::actors::StopMessage;
-use crate::consts::DELAY_BEFORE_SHUTDOWN;
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -39,14 +38,7 @@ impl Handler<StopMessage> for StopActor {
             let _ = stop_recipient.do_send(StopMessage);
         }
 
-        info!(
-            "Waiting for {:?} before shutdown the system",
-            &*DELAY_BEFORE_SHUTDOWN
-        );
-        let _ = ctx.run_later(DELAY_BEFORE_SHUTDOWN.clone(), |_, ctx| {
-            System::current().stop();
-            ctx.stop();
-        });
+        ctx.stop();
     }
 }
 

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use actix::{Actor, Arbiter, AsyncContext, Context, Handler, Message, Recipient};
-use log::info;
+use log::{error, info};
 use mqtt::packet::PingreqPacket;
 
 use crate::actors::actions::status::PacketStatusMessages;
@@ -20,6 +20,7 @@ struct SendPing(pub u16);
 
 pub struct PingreqActor {
     status_recipient: Recipient<PacketStatusMessages<()>>,
+    connect_status_recipient: Recipient<PacketStatusMessages<()>>,
     send_recipient: Recipient<VariablePacketMessage>,
     error_recipient: Recipient<ErrorMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -29,6 +30,7 @@ pub struct PingreqActor {
 impl PingreqActor {
     pub fn new(
         status_recipient: Recipient<PacketStatusMessages<()>>,
+        connect_status_recipient: Recipient<PacketStatusMessages<()>>,
         send_recipient: Recipient<VariablePacketMessage>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
@@ -36,6 +38,7 @@ impl PingreqActor {
     ) -> Self {
         PingreqActor {
             status_recipient,
+            connect_status_recipient,
             send_recipient,
             error_recipient,
             stop_recipient,
@@ -66,11 +69,32 @@ impl Handler<Pingreq> for PingreqActor {
         let last_retry_count = msg.0;
         assert_valid_retry_count!(PingreqActor, self, last_retry_count, 0);
         let status_recipient = self.status_recipient.clone();
+        let connect_status_recipient = self.connect_status_recipient.clone();
         let error_recipient = self.error_recipient.clone();
         let stop_recipient = self.stop_recipient.clone();
         let addr = ctx.address();
         let addr_clone = addr.clone();
         let status_future = async move {
+            // For connect status:
+            //      status message with id = 0 indicating the connecing status
+            //      status message with id = 1 indicating the connected status
+            let connect_status_result = connect_status_recipient
+                .send(PacketStatusMessages::GetPacketStatus(1))
+                .await;
+            match connect_status_result {
+                Ok(None) => {
+                    info!("Server not connected yet, do nothing.");
+                    return;
+                }
+                Err(e) => {
+                    error!("Failed to get connect status: {}", e);
+                    return;
+                }
+                _ => {
+                    info!("Server connected, will send ping");
+                }
+            }
+
             let status_result = status_recipient
                 .send(PacketStatusMessages::GetPacketStatus(0))
                 .await;
@@ -83,6 +107,7 @@ impl Handler<Pingreq> for PingreqActor {
                 }
                 Err(e) => {
                     handle_mailbox_error_with_resend(
+                        "PingreqActor:status_recipient",
                         e,
                         &error_recipient,
                         &stop_recipient,

@@ -5,9 +5,8 @@ use log::info;
 use mqtt::control::variable_header::ConnectReturnCode;
 use mqtt::packet::ConnackPacket;
 
-use crate::actors::actions::status::PacketStatusMessages;
-use crate::actors::{send_error, stop_system, ErrorMessage, StopMessage};
-use crate::errors;
+use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::{send_error, ErrorMessage, StopMessage};
 
 use super::PacketMessage;
 
@@ -50,18 +49,33 @@ impl Handler<PacketMessage<ConnackPacket>> for ConnackActor {
             .try_send(PacketStatusMessages::RemovePacketStatus(0))
         {
             send_error(
+                "ConnackActor::status_recipient",
                 &self.error_recipient,
                 ErrorKind::NotConnected,
                 format!("Failed to mark status for connack packet: {}", e),
             );
-            stop_system(&self.stop_recipient, errors::ERROR_CODE_SERVER_RETURNS_FAIL)
+            let _ = self.stop_recipient.do_send(StopMessage);
         } else {
             let return_code = msg.packet.connect_return_code();
             if return_code == ConnectReturnCode::ConnectionAccepted {
-                ctx.stop();
+                // For connect status:
+                //      status message with id = 0 indicating the connecing status
+                //      status message with id = 1 indicating the connected status
+                let _ = self
+                    .status_recipient
+                    .do_send(PacketStatusMessages::SetPacketStatus(
+                        1,
+                        PacketStatus {
+                            id: 1,
+                            retry_count: 0,
+                            payload: (),
+                        },
+                    ));
                 let _ = self.connect_stop_recipient.do_send(StopMessage);
+                ctx.stop();
             } else {
                 send_error(
+                    "ConnackActor::connect",
                     &self.error_recipient,
                     ErrorKind::NotConnected,
                     format!(
@@ -69,10 +83,8 @@ impl Handler<PacketMessage<ConnackPacket>> for ConnackActor {
                         return_code
                     ),
                 );
-                stop_system(
-                    &self.stop_recipient,
-                    errors::ERROR_CODE_SERVER_REFUSE_TO_CONNECT,
-                );
+
+                let _ = self.stop_recipient.do_send(StopMessage);
             }
         }
     }

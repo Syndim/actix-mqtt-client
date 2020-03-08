@@ -44,6 +44,7 @@ impl<T: AsyncRead + Unpin + 'static> StreamHandler<VariablePacket> for RecvActor
     fn handle(&mut self, item: VariablePacket, _ctx: &mut Self::Context) {
         if let Err(e) = self.recipient.try_send(VariablePacketMessage::new(item, 0)) {
             send_error(
+                "RecvActor::stream_handler",
                 &self.error_recipient,
                 ErrorKind::Interrupted,
                 format!("Error when sending packet: {}", e),
@@ -66,10 +67,14 @@ impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
                 async move {
                     let packet_result = VariablePacket::parse(&mut r).await;
                     match packet_result {
-                        Ok(packet) => Some((packet, r)),
+                        Ok(packet) => {
+                            info!("Parse packet succeeded");
+                            Some((packet, r))
+                        }
                         Err(e) => {
                             error!("Failed to parse packet: {}", e);
                             send_error(
+                                "RecvActor::parse_packet",
                                 &error_recipient,
                                 ErrorKind::Interrupted,
                                 format!("Error when parsing packet: {}", e),
@@ -84,6 +89,7 @@ impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
             Self::add_stream(packet_stream, ctx);
         } else {
             send_error(
+                "RecvActor::stream",
                 &self.error_recipient,
                 ErrorKind::NotFound,
                 "Failed to create packet stream: input stream is None",

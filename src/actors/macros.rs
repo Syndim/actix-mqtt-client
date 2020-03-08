@@ -26,11 +26,11 @@ macro_rules! impl_generic_empty_actor {
             type Context = actix::Context<Self>;
             fn started(&mut self, ctx: &mut Self::Context) {
                 ctx.set_mailbox_capacity($mailbox_capacity);
-                log::info!(concat!(stringify!($name), " started"));
+                log::info!(concat!(stringify!($name), "[{}]", " started"), self.name);
             }
 
             fn stopped(&mut self, _: &mut Self::Context) {
-                log::info!(concat!(stringify!($name), " stopped"));
+                log::info!(concat!(stringify!($name), "[{}]", " stopped"), self.name);
             }
         }
     };

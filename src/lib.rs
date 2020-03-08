@@ -124,7 +124,6 @@
 mod actors;
 mod client;
 mod consts;
-mod errors;
 
 pub use actix;
 pub use futures;
@@ -206,6 +205,12 @@ mod tests {
                         None,
                     );
                     client.connect().await?;
+                    while !client.is_connected().await.unwrap() {
+                        log::info!("Waiting for client to be connected");
+                        let delay_time = Instant::now() + Duration::new(0, 100);
+                        delay_until(delay_time).await;
+                    }
+
                     log::info!("MQTT connected");
                     log::info!("Subscribe");
                     client
@@ -219,8 +224,8 @@ mod tests {
                             Vec::from("test".as_bytes()),
                         )
                         .await?;
-                    log::info!("Wait for 10s");
-                    let delay_time = Instant::now() + Duration::new(10, 0);
+                    log::info!("Wait for 1s");
+                    let delay_time = Instant::now() + Duration::new(1, 0);
                     delay_until(delay_time).await;
                     client
                         .publish(
@@ -229,8 +234,8 @@ mod tests {
                             Vec::from("test2".as_bytes()),
                         )
                         .await?;
-                    log::info!("Wait for 10s");
-                    let delay_time = Instant::now() + Duration::new(10, 0);
+                    log::info!("Wait for 1s");
+                    let delay_time = Instant::now() + Duration::new(1, 0);
                     delay_until(delay_time).await;
                     client
                         .publish(
@@ -239,16 +244,27 @@ mod tests {
                             Vec::from("test3".as_bytes()),
                         )
                         .await?;
-                    log::info!("Wait for 10s");
-                    let delay_time = Instant::now() + Duration::new(10, 0);
+                    log::info!("Wait for 1s");
+                    let delay_time = Instant::now() + Duration::new(1, 0);
                     delay_until(delay_time).await;
                     log::info!("Disconnect");
                     client.disconnect(false).await?;
                     log::info!("Check if disconnect is successful");
+                    for _ in 0..5 {
+                        if client.is_disconnected() {
+                            break;
+                        }
+
+                        let delay_time = Instant::now() + Duration::new(0, 200);
+                        delay_until(delay_time).await;
+                    }
+
                     Ok(assert_eq!(true, client.is_disconnected())) as Result<(), IoError>
                 }
                 .await;
-                result.unwrap()
+                let r = result.unwrap();
+                System::current().stop();
+                r
             };
             Arbiter::spawn(future);
         })
@@ -335,8 +351,14 @@ mod random_test {
                         ErrorActor.start().recipient(),
                         None,
                     );
-                    log::info!("Connected");
                     client.connect().await?;
+                    while !client.is_connected().await.unwrap() {
+                        log::info!("Waiting for client to be connected");
+                        let delay_time = Instant::now() + Duration::new(0, 100);
+                        delay_until(delay_time).await;
+                    }
+
+                    log::info!("Connected");
                     log::info!("Subscribe");
                     client
                         .subscribe(String::from("test"), mqtt::QualityOfService::Level0)
@@ -354,7 +376,7 @@ mod random_test {
                             rand::thread_rng().fill_bytes(&mut data);
                             let payload = Vec::from(&data[..]);
                             log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
-                            delay_until(Instant::now() + Duration::from_millis(10)).await;
+                            delay_until(Instant::now() + Duration::from_millis(100)).await;
                             sender.try_send((true, payload.clone())).unwrap();
                             client
                                 .publish(
@@ -438,8 +460,13 @@ mod random_test {
                     ErrorActor.start().recipient(),
                     None,
                 );
-                log::info!("Connected");
                 client.connect().await?;
+                while !client.is_connected().await.unwrap() {
+                    log::info!("Waiting for client to be connected");
+                    let delay_time = Instant::now() + Duration::new(0, 100);
+                    delay_until(delay_time).await;
+                }
+                log::info!("Connected");
                 log::info!("Subscribe");
                 client
                     .subscribe(String::from("test"), mqtt::QualityOfService::Level0)
@@ -457,7 +484,7 @@ mod random_test {
                         rand::thread_rng().fill_bytes(&mut data);
                         let payload = Vec::from(&data[..]);
                         log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
-                        delay_until(Instant::now() + Duration::from_millis(10)).await;
+                        delay_until(Instant::now() + Duration::from_millis(100)).await;
                         sender.try_send((true, payload.clone())).unwrap();
                         client
                             .publish(
@@ -547,8 +574,13 @@ mod random_test {
                         ErrorActor.start().recipient(),
                         None,
                     );
-                    log::info!("Connected");
                     client.connect().await?;
+                    while !client.is_connected().await.unwrap() {
+                        log::info!("Waiting for client to be connected");
+                        let delay_time = Instant::now() + Duration::new(0, 100);
+                        delay_until(delay_time).await;
+                    }
+                    log::info!("Connected");
                     log::info!("Subscribe");
                     client
                         .subscribe(String::from("test"), mqtt::QualityOfService::Level2)

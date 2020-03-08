@@ -7,23 +7,26 @@ use mqtt::encodable::Encodable;
 use tokio::io::AsyncWrite;
 
 use crate::actors::packets::VariablePacketMessage;
-use crate::actors::{send_error, ErrorMessage, StopMessage, stop_system};
-use crate::errors::ERROR_CODE_WRITER_ERROR;
+use crate::actors::{send_error, ErrorMessage, StopMessage};
 
 pub struct SendActor<T: AsyncWrite> {
     stream: Option<T>,
     writer: Option<Writer<T, Error>>,
     error_recipient: Recipient<ErrorMessage>,
-    stop_recipient: Recipient<StopMessage>
+    stop_recipient: Recipient<StopMessage>,
 }
 
 impl<T: AsyncWrite + Unpin> SendActor<T> {
-    pub fn new(stream: T, error_recipient: Recipient<ErrorMessage>, stop_recipient: Recipient<StopMessage>) -> Self {
+    pub fn new(
+        stream: T,
+        error_recipient: Recipient<ErrorMessage>,
+        stop_recipient: Recipient<StopMessage>,
+    ) -> Self {
         SendActor {
             stream: Some(stream),
             writer: None,
             error_recipient,
-            stop_recipient
+            stop_recipient,
         }
     }
 }
@@ -31,8 +34,13 @@ impl<T: AsyncWrite + Unpin> SendActor<T> {
 impl<T: AsyncWrite + Unpin + 'static> WriteHandler<Error> for SendActor<T> {
     fn error(&mut self, err: Error, _ctx: &mut Self::Context) -> Running {
         error!("Error in write handler, {:?}", err);
-        send_error(&self.error_recipient, ErrorKind::Interrupted, format!("{:?}", err));
-        stop_system(&self.stop_recipient, ERROR_CODE_WRITER_ERROR);
+        send_error(
+            "SendActor::error",
+            &self.error_recipient,
+            ErrorKind::Interrupted,
+            format!("{:?}", err),
+        );
+        let _ = self.stop_recipient.do_send(StopMessage);
         Running::Stop
     }
 
@@ -69,7 +77,12 @@ impl<T: AsyncWrite + Unpin + 'static> Handler<VariablePacketMessage> for SendAct
     fn handle(&mut self, msg: VariablePacketMessage, _: &mut Self::Context) -> Self::Result {
         if self.writer.is_none() {
             error!("Writer is none");
-            send_error(&self.error_recipient, ErrorKind::NotFound, "Writer is none");
+            send_error(
+                "SendActor::writer",
+                &self.error_recipient,
+                ErrorKind::NotFound,
+                "Writer is none",
+            );
 
             return;
         }
@@ -78,6 +91,7 @@ impl<T: AsyncWrite + Unpin + 'static> Handler<VariablePacketMessage> for SendAct
         if let Err(e) = msg.packet.encode(&mut buf) {
             error!("Failed to encode message, error {}", e);
             send_error(
+                "SendActor::encode",
                 &self.error_recipient,
                 ErrorKind::Interrupted,
                 format!("Failed to send message, error: {}", e),

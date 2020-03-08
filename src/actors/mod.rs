@@ -7,16 +7,14 @@ pub mod packets;
 mod utils;
 
 use std::io::ErrorKind;
-use std::thread::sleep;
 
 use actix::dev::ToEnvelope;
 use actix::prelude::SendError;
-use actix::{Actor, Addr, Arbiter, Handler, MailboxError, Message, Recipient, System};
-use log::{error, info};
+use actix::{Actor, Addr, Arbiter, Handler, MailboxError, Message, Recipient};
+use log::info;
 use tokio::time::{delay_until, Instant};
 
-use crate::consts::{DELAY_BEFORE_SHUTDOWN, RESEND_DELAY};
-use crate::errors;
+use crate::consts::RESEND_DELAY;
 
 /// The actix message indicating that the client is about to stop
 #[derive(Message)]
@@ -28,28 +26,19 @@ pub struct StopMessage;
 #[rtype(result = "()")]
 pub struct ErrorMessage(pub io::Error);
 
-pub fn stop_system(stop_recipient: &Recipient<StopMessage>, code: i32) {
-    // Can't recover, exit the system
-    error!("Stopping the system");
-    let _ = stop_recipient.do_send(StopMessage);
-    sleep(DELAY_BEFORE_SHUTDOWN.clone());
-    System::current().stop_with_code(code);
-}
-
-pub fn force_stop_system(code: i32) {
-    error!("Force stopping the system");
-    sleep(DELAY_BEFORE_SHUTDOWN.clone());
-    System::current().stop_with_code(code);
-}
-
 pub fn send_error<T: AsRef<str>>(
+    tag: &str,
     error_recipient: &Recipient<ErrorMessage>,
     kind: io::ErrorKind,
     message: T,
 ) {
     let error = io::Error::new(kind, message.as_ref());
     let send_result = error_recipient.try_send(ErrorMessage(error));
-    log::info!("Send result for error recipient: {:?}", send_result);
+    log::info!(
+        "[{}] Send result for error recipient: {:?}",
+        tag,
+        send_result
+    );
 }
 
 fn resend<TActor, TMessage>(addr: Addr<TActor>, msg: TMessage)
@@ -77,15 +66,21 @@ fn handle_send_error<T>(
     match e {
         SendError::Closed(_) => {
             send_error(
+                tag,
                 error_recipient,
                 ErrorKind::Interrupted,
                 format!("[{}] Target mailbox is closed", tag),
             );
-            stop_system(stop_recipient, errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+            let _ = stop_recipient.do_send(StopMessage);
         }
         SendError::Full(_) => {
             // Do nothing
-            send_error(error_recipient, ErrorKind::Other, format!("[{}] Target mailbox is full", tag));
+            send_error(
+                tag,
+                error_recipient,
+                ErrorKind::Other,
+                format!("[{}] Target mailbox is full", tag),
+            );
         }
     }
 }
@@ -106,14 +101,16 @@ fn handle_send_error_with_resend<T, TActor, TMessage>(
     match e {
         SendError::Closed(_) => {
             send_error(
+                tag,
                 error_recipient,
                 ErrorKind::Interrupted,
                 format!("[{}] Target mailbox is closed", tag),
             );
-            stop_system(stop_recipient, errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+            let _ = stop_recipient.do_send(StopMessage);
         }
         SendError::Full(_) => {
             send_error(
+                tag,
                 error_recipient,
                 ErrorKind::Other,
                 format!("[{}] Target mailbox is full, will retry send", tag),
@@ -145,6 +142,7 @@ fn handle_send_error_with_resend<T, TActor, TMessage>(
 // }
 
 fn handle_mailbox_error_with_resend<TActor, TMessage>(
+    tag: &str,
     e: MailboxError,
     error_recipient: &Recipient<ErrorMessage>,
     stop_recipient: &Recipient<StopMessage>,
@@ -159,14 +157,16 @@ fn handle_mailbox_error_with_resend<TActor, TMessage>(
     match e {
         MailboxError::Closed => {
             send_error(
+                tag,
                 error_recipient,
                 ErrorKind::Interrupted,
                 "Target mailbox is closed",
             );
-            stop_system(stop_recipient, errors::ERROR_CODE_FAILED_TO_SEND_MESSAGE);
+            let _ = stop_recipient.do_send(StopMessage);
         }
         MailboxError::Timeout => {
             send_error(
+                tag,
                 error_recipient,
                 ErrorKind::Other,
                 "Send timeout, will resend",
