@@ -2,7 +2,7 @@ use std::io::{Error, ErrorKind};
 
 use actix::io::{WriteHandler, Writer};
 use actix::{Actor, ActorContext, Context, Handler, Recipient, Running};
-use log::{error, info};
+use log::{error, trace};
 use mqtt::encodable::Encodable;
 use tokio::io::AsyncWrite;
 
@@ -45,7 +45,7 @@ impl<T: AsyncWrite + Unpin + 'static> WriteHandler<Error> for SendActor<T> {
     }
 
     fn finished(&mut self, ctx: &mut Self::Context) {
-        info!("Writer finished");
+        trace!("Writer finished");
         ctx.stop()
     }
 }
@@ -55,11 +55,11 @@ impl<T: AsyncWrite + Unpin + 'static> Actor for SendActor<T> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let stream = self.stream.take().unwrap();
         self.writer = Some(Writer::new(stream, ctx));
-        info!("SendActor started");
+        trace!("SendActor started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        info!("SendActor stopped");
+        trace!("SendActor stopped");
     }
 }
 
@@ -67,7 +67,7 @@ impl<T: AsyncWrite + Unpin + 'static> actix::Handler<StopMessage> for SendActor<
     type Result = ();
 
     fn handle(&mut self, _: StopMessage, ctx: &mut Self::Context) -> Self::Result {
-        info!("Got stop message");
+        trace!("Got stop message");
         ctx.stop();
     }
 }

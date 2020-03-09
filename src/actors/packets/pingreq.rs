@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use actix::{Actor, Arbiter, AsyncContext, Context, Handler, Message, Recipient};
-use log::{error, info};
+use log::{error, info, trace};
 use mqtt::packet::PingreqPacket;
 
 use crate::actors::actions::status::PacketStatusMessages;
@@ -50,16 +50,16 @@ impl PingreqActor {
 impl Actor for PingreqActor {
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("PingreqActor started");
+        trace!("PingreqActor started");
         ctx.notify(Pingreq(0));
         ctx.run_interval(self.interval.clone(), |_, ctx| {
-            info!("Start to send ping");
+            trace!("Start to send ping");
             ctx.notify(Pingreq(0));
         });
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        info!("PingreqActor stopped");
+        trace!("PingreqActor stopped");
     }
 }
 
