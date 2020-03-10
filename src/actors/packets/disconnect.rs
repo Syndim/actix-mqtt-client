@@ -1,5 +1,5 @@
 use actix::{ActorContext, AsyncContext, Handler, Message, Recipient};
-use log::{ trace, debug};
+use log::{debug, trace};
 use mqtt::packet::{DisconnectPacket, VariablePacket};
 
 use crate::actors::{ErrorMessage, StopMessage};

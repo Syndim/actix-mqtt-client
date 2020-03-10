@@ -11,7 +11,7 @@ use std::io::ErrorKind;
 use actix::dev::ToEnvelope;
 use actix::prelude::SendError;
 use actix::{Actor, Addr, Arbiter, Handler, MailboxError, Message, Recipient};
-use log::{trace};
+use log::trace;
 use tokio::time::{delay_until, Instant};
 
 use crate::consts::RESEND_DELAY;

@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{ActorContext, Handler, Recipient};
-use log::{trace};
+use log::trace;
 use mqtt::control::variable_header::ConnectReturnCode;
 use mqtt::packet::ConnackPacket;
 

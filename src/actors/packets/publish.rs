@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{Addr, Arbiter, AsyncContext, Handler, MailboxError, Message, Recipient};
-use log::{trace, debug};
+use log::{debug, trace};
 use mqtt::packet::{
     Packet, PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
 };

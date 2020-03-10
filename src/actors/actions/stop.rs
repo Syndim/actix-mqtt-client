@@ -1,7 +1,7 @@
 use std::vec::Vec;
 
 use actix::{ActorContext, Handler, Message, Recipient};
-use log::{trace};
+use log::trace;
 
 use crate::actors::StopMessage;
 

@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{Arbiter, AsyncContext, Handler, Message, Recipient};
-use log::{trace};
+use log::trace;
 use mqtt::packet::{ConnectPacket, VariablePacket};
 
 use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
