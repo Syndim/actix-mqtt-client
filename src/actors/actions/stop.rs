@@ -1,7 +1,7 @@
 use std::vec::Vec;
 
 use actix::{ActorContext, Handler, Message, Recipient};
-use log::info;
+use log::trace;
 
 use crate::actors::StopMessage;
 
@@ -29,7 +29,7 @@ impl Handler<StopMessage> for StopActor {
     type Result = ();
     fn handle(&mut self, _: StopMessage, ctx: &mut Self::Context) -> Self::Result {
         if self.stopping {
-            info!("Already stopping");
+            trace!("Already stopping");
             return;
         }
 

@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{Arbiter, AsyncContext, Handler, Message, Recipient};
-use log::info;
+use log::trace;
 use mqtt::packet::{ConnectPacket, VariablePacket};
 
 use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
@@ -51,7 +51,7 @@ impl_stop_handler!(ConnectActor);
 impl Handler<Connect> for ConnectActor {
     type Result = ();
     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
-        info!("Handle message for ConnectActor");
+        trace!("Handle message for ConnectActor");
 
         // For connect status:
         //      status message with id = 0 indicating the connecing status

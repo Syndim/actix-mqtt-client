@@ -7,11 +7,11 @@ macro_rules! impl_empty_actor {
             type Context = actix::Context<Self>;
             fn started(&mut self, ctx: &mut Self::Context) {
                 ctx.set_mailbox_capacity($mailbox_capacity);
-                log::info!(concat!(stringify!($name), " started"));
+                log::debug!(concat!(stringify!($name), " started"));
             }
 
             fn stopped(&mut self, _: &mut Self::Context) {
-                log::info!(concat!(stringify!($name), " stopped"));
+                log::debug!(concat!(stringify!($name), " stopped"));
             }
         }
     };
@@ -26,11 +26,11 @@ macro_rules! impl_generic_empty_actor {
             type Context = actix::Context<Self>;
             fn started(&mut self, ctx: &mut Self::Context) {
                 ctx.set_mailbox_capacity($mailbox_capacity);
-                log::info!(concat!(stringify!($name), "[{}]", " started"), self.name);
+                log::debug!(concat!(stringify!($name), "[{}]", " started"), self.name);
             }
 
             fn stopped(&mut self, _: &mut Self::Context) {
-                log::info!(concat!(stringify!($name), "[{}]", " stopped"), self.name);
+                log::debug!(concat!(stringify!($name), "[{}]", " stopped"), self.name);
             }
         }
     };
@@ -46,7 +46,7 @@ macro_rules! impl_stop_handler {
                 _: crate::actors::StopMessage,
                 ctx: &mut Self::Context,
             ) -> Self::Result {
-                log::info!(concat!("Handle stop message for ", stringify!($name)));
+                log::debug!(concat!("Handle stop message for ", stringify!($name)));
                 use actix::ActorContext;
                 ctx.stop();
             }
@@ -64,7 +64,7 @@ macro_rules! impl_generic_stop_handler {
                 _: crate::actors::StopMessage,
                 ctx: &mut Self::Context,
             ) -> Self::Result {
-                log::info!(concat!("Handle stop message for ", stringify!($name)));
+                log::debug!(concat!("Handle stop message for ", stringify!($name)));
                 use actix::ActorContext;
                 ctx.stop();
             }

@@ -2,7 +2,7 @@ use std::io::ErrorKind;
 
 use actix::{Actor, ActorContext, Context as ActixContext, Handler, Recipient, StreamHandler};
 use futures::stream;
-use log::{error, info};
+use log::{error, trace};
 use mqtt::packet::VariablePacket;
 use tokio::io::AsyncRead;
 
@@ -56,7 +56,7 @@ impl<T: AsyncRead + Unpin + 'static> StreamHandler<VariablePacket> for RecvActor
 impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
     type Context = ActixContext<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("RecvActor started");
+        trace!("RecvActor started");
 
         if let Some(reader) = self.stream.take() {
             let error_recipient = self.error_recipient.clone();
@@ -68,7 +68,7 @@ impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
                     let packet_result = VariablePacket::parse(&mut r).await;
                     match packet_result {
                         Ok(packet) => {
-                            info!("Parse packet succeeded");
+                            trace!("Parse packet succeeded");
                             Some((packet, r))
                         }
                         Err(e) => {
@@ -99,7 +99,7 @@ impl<T: AsyncRead + Unpin + 'static> Actor for RecvActor<T> {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        info!("RecvActor stopped");
+        trace!("RecvActor stopped");
         let _ = self.stop_recipient.do_send(StopMessage);
     }
 }

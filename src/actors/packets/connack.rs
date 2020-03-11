@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{ActorContext, Handler, Recipient};
-use log::info;
+use log::trace;
 use mqtt::control::variable_header::ConnectReturnCode;
 use mqtt::packet::ConnackPacket;
 
@@ -43,7 +43,7 @@ impl Handler<PacketMessage<ConnackPacket>> for ConnackActor {
         msg: PacketMessage<ConnackPacket>,
         ctx: &mut Self::Context,
     ) -> Self::Result {
-        info!("Handle message for ConnackActor");
+        trace!("Handle message for ConnackActor");
         if let Err(e) = self
             .status_recipient
             .try_send(PacketStatusMessages::RemovePacketStatus(0))

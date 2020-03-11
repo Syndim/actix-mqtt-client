@@ -1,5 +1,5 @@
 use actix::{ActorContext, AsyncContext, Handler, Message, Recipient};
-use log::info;
+use log::{debug, trace};
 use mqtt::packet::{DisconnectPacket, VariablePacket};
 
 use crate::actors::{ErrorMessage, StopMessage};
@@ -48,10 +48,10 @@ impl_stop_handler!(DisconnectActor);
 impl Handler<Disconnect> for DisconnectActor {
     type Result = ();
     fn handle(&mut self, msg: Disconnect, ctx: &mut Self::Context) -> Self::Result {
-        info!("Handle message for DisconnectActor");
+        trace!("Handle message for DisconnectActor");
         // Need to wait for all pending packets to be sent before sending disconnect to server
         if msg.force || self.packet_send_finished {
-            info!(
+            debug!(
                 "Sending disconnect to sever, force: {}, no pending packet: {}",
                 msg.force, self.packet_send_finished
             );
@@ -69,7 +69,7 @@ impl Handler<Disconnect> for DisconnectActor {
             let _ = self.stop_recipient.do_send(StopMessage);
             ctx.stop();
         } else {
-            info!(
+            trace!(
                 "Has pending packet, wait for them to be sent before sending disconnect to server"
             );
             self.pending_disconnect = true;

@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use actix::{Addr, Arbiter, AsyncContext, Handler, MailboxError, Message, Recipient};
-use log::info;
+use log::{debug, trace};
 use mqtt::packet::{
     Packet, PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
 };
@@ -100,7 +100,7 @@ impl_stop_handler!(SendPublishActor);
 impl Handler<Publish> for SendPublishActor {
     type Result = ();
     fn handle(&mut self, msg: Publish, ctx: &mut Self::Context) -> Self::Result {
-        info!("Handle message for SendPublishActor");
+        trace!("Handle message for SendPublishActor");
         assert_valid_retry_count!(SendPublishActor, self, msg.retry_count, 0);
         let packet_and_id_option = create_packet_and_id_from_message(&msg, &self.error_recipient);
         if packet_and_id_option.is_none() {
@@ -293,7 +293,7 @@ impl RecvPublishActor {
             }
             Err(e) => match e {
                 MailboxError::Closed => {
-                    info!("Status mailbox is closed, no need for status check phase 2");
+                    debug!("Status mailbox is closed, no need for status check phase 2");
                 }
                 _ => {
                     handle_mailbox_error_with_resend(
@@ -340,7 +340,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
         msg: PacketMessage<PublishPacket>,
         ctx: &mut Self::Context,
     ) -> Self::Result {
-        info!("Handle message for RecvPublishActor");
+        trace!("Handle message for RecvPublishActor");
         let packet = &msg.packet;
         match packet.qos() {
             QoSWithPacketIdentifier::Level0 => {
