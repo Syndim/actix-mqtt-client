@@ -1,6 +1,6 @@
 [package]
 name = "actix-mqtt-client"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Syndim <im@syndim.org>"]
 edition = "2018"
 repository = "https://github.com/Syndim/actix-mqtt-client"
@@ -9,7 +9,7 @@ license = "MIT"
 documentation = "https://docs.rs/actix-mqtt-client/"
 
 [dependencies]
-actix = "0.9"
+actix = "0.10"
 log = "0.4"
 futures = "0.3"
 lazy_static = "1.4"

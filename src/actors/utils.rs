@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use rand;
 
 lazy_static! {
-    static ref ID: AtomicUsize = { AtomicUsize::new(rand::random()) };
+    static ref ID: AtomicUsize = AtomicUsize::new(rand::random());
 }
 
 static U16_MAX: usize = std::u16::MAX as usize;
