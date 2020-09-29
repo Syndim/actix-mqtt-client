@@ -8,7 +8,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use crate::actors::actions::dispatch::DispatchActor;
 use crate::actors::actions::recv::RecvActor;
 use crate::actors::actions::send::SendActor;
-use crate::actors::actions::status::{PacketStatusActor, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatusActor, StatusExistenceMessage};
 use crate::actors::actions::stop::{AddStopRecipient, StopActor};
 use crate::actors::packets::connack::ConnackActor;
 use crate::actors::packets::connect::{Connect, ConnectActor};
@@ -129,14 +129,14 @@ impl MqttClient {
     pub async fn is_connected(&self) -> IoResult<bool> {
         match self.conn_status_addr {
             Some(ref addr) => {
-                let connection_status = addr
-                    .send(PacketStatusMessages::GetPacketStatus(1))
+                let connected = addr
+                    .send(StatusExistenceMessage(1))
                     .await
                     .map_err(|e| {
-                    log::error!("Failed to get connection status: {}", e);
-                    IoError::new(ErrorKind::NotConnected, "Failed to connect to server")
-                })?;
-                Ok(connection_status.is_some())
+                        log::error!("Failed to get connection status: {}", e);
+                        IoError::new(ErrorKind::NotConnected, "Failed to connect to server")
+                    })?;
+                Ok(connected)
             }
             None => Ok(false),
         }

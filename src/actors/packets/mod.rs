@@ -21,7 +21,7 @@ use actix::dev::ToEnvelope;
 use actix::{Actor, AsyncContext, Context, Handler, Message, Recipient};
 use mqtt::packet::VariablePacket;
 
-use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::{ErrorMessage, StopMessage};
 use crate::consts::COMMAND_TIMEOUT;
 
@@ -70,7 +70,7 @@ pub enum PublishPacketStatus {
 
 fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
     ctx: &mut Context<TActor>,
-    status_recipient: &Recipient<PacketStatusMessages<TStatusPayload>>,
+    status_recipient: &Recipient<StatusOperationMessage<TStatusPayload>>,
     error_recipient: &Recipient<ErrorMessage>,
     stop_recipient: &Recipient<StopMessage>,
     id: u16,
@@ -93,7 +93,11 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
     ctx.run_later(COMMAND_TIMEOUT.clone(), move |_, _| {
         let status_future = async move {
             let status_result = status_recipient
-                .send(crate::actors::actions::status::PacketStatusMessages::GetPacketStatus(id))
+                .send(
+                    crate::actors::actions::status::StatusOperationMessage::GetAndRemovePacketStatus(
+                        id,
+                    ),
+                )
                 .await;
             match status_result {
                 Ok(status) => {
@@ -121,11 +125,11 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
 fn set_packet_status<TActor, TMessage, TStatusPayload>(
     tag: &str,
     ctx: &mut Context<TActor>,
-    status_recipient: &Recipient<PacketStatusMessages<TStatusPayload>>,
+    status_recipient: &Recipient<StatusOperationMessage<TStatusPayload>>,
     error_recipient: &Recipient<ErrorMessage>,
     stop_recipient: &Recipient<StopMessage>,
     resend_msg: TMessage,
-    status: PacketStatusMessages<TStatusPayload>,
+    status_message: StatusOperationMessage<TStatusPayload>,
 ) -> bool
 where
     TActor: Actor<Context = Context<TActor>> + Handler<TMessage>,
@@ -134,7 +138,7 @@ where
     TActor::Context: ToEnvelope<TActor, TMessage>,
     TStatusPayload: Send,
 {
-    if let Err(e) = status_recipient.try_send(status) {
+    if let Err(e) = status_recipient.try_send(status_message) {
         let addr = ctx.address();
         handle_send_error_with_resend(tag, e, error_recipient, stop_recipient, addr, resend_msg);
         false
@@ -146,7 +150,7 @@ where
 fn reset_packet_status<TActor, TMessage, TStatusPayload>(
     tag: &str,
     ctx: &mut Context<TActor>,
-    status_recipient: &Recipient<PacketStatusMessages<TStatusPayload>>,
+    status_recipient: &Recipient<StatusOperationMessage<TStatusPayload>>,
     error_recipient: &Recipient<ErrorMessage>,
     stop_recipient: &Recipient<StopMessage>,
     id: u16,
@@ -159,7 +163,7 @@ where
     TActor::Context: ToEnvelope<TActor, TMessage>,
     TStatusPayload: Send,
 {
-    if let Err(e) = status_recipient.try_send(PacketStatusMessages::RemovePacketStatus(id)) {
+    if let Err(e) = status_recipient.try_send(StatusOperationMessage::RemovePacketStatus(id)) {
         let addr = ctx.address();
         handle_send_error_with_resend(tag, e, error_recipient, stop_recipient, addr, resend_msg);
         false

@@ -3,7 +3,7 @@ macro_rules! assert_valid_retry_count {
         if $last_retry_count > crate::consts::MAX_RETRY_COUNT {
             log::error!("Max retry count excceeded");
             if let Err(e) = $self.status_recipient.do_send(
-                crate::actors::actions::status::PacketStatusMessages::RemovePacketStatus($id),
+                crate::actors::actions::status::StatusOperationMessage::RemovePacketStatus($id),
             ) {
                 crate::actors::handle_send_error(
                     concat!(stringify!($name), ":status_recipient"),
@@ -25,7 +25,7 @@ macro_rules! define_response_packet_actor {
     ($name:ident, $status_payload_type:ty) => {
         pub struct $name {
             status_recipient: actix::Recipient<
-                crate::actors::actions::status::PacketStatusMessages<$status_payload_type>,
+                crate::actors::actions::status::StatusOperationMessage<$status_payload_type>,
             >,
             error_recipient: actix::Recipient<crate::actors::ErrorMessage>,
             stop_recipient: actix::Recipient<crate::actors::StopMessage>,
@@ -34,7 +34,7 @@ macro_rules! define_response_packet_actor {
         impl $name {
             pub fn new(
                 status_recipient: actix::Recipient<
-                    crate::actors::actions::status::PacketStatusMessages<$status_payload_type>,
+                    crate::actors::actions::status::StatusOperationMessage<$status_payload_type>,
                 >,
                 error_recipient: actix::Recipient<crate::actors::ErrorMessage>,
                 stop_recipient: actix::Recipient<crate::actors::StopMessage>,
@@ -63,7 +63,7 @@ macro_rules! impl_response_packet_actor {
                 msg: crate::actors::packets::PacketMessage<mqtt::packet::$packet>,
                 ctx: &mut Self::Context,
             ) -> Self::Result {
-                log::info!(concat!("Handling message for ", stringify!($name)));
+                log::trace!(concat!("Handling message for ", stringify!($name)));
                 let id = $get_id_from_packet(&msg.packet);
                 crate::actors::packets::reset_packet_status(
                     stringify!($name),
@@ -104,7 +104,7 @@ macro_rules! define_send_packet_actor {
     ($name:ident, $status_paylod_type:ty) => {
         pub struct $name {
             status_recipient: actix::Recipient<
-                crate::actors::actions::status::PacketStatusMessages<$status_paylod_type>,
+                crate::actors::actions::status::StatusOperationMessage<$status_paylod_type>,
             >,
             send_recipient: actix::Recipient<crate::actors::packets::VariablePacketMessage>,
             error_recipient: actix::Recipient<crate::actors::ErrorMessage>,
@@ -114,7 +114,7 @@ macro_rules! define_send_packet_actor {
         impl $name {
             pub fn new(
                 status_recipient: actix::Recipient<
-                    crate::actors::actions::status::PacketStatusMessages<$status_paylod_type>,
+                    crate::actors::actions::status::StatusOperationMessage<$status_paylod_type>,
                 >,
                 send_recipient: actix::Recipient<crate::actors::packets::VariablePacketMessage>,
                 error_recipient: actix::Recipient<crate::actors::ErrorMessage>,
@@ -140,14 +140,16 @@ macro_rules! impl_send_packet_actor {
             $get_retry_count_from_message,
             $create_retry_msessage_from_message,
             $create_packet_and_id_from_message,
-            |id, retry_count| crate::actors::actions::status::PacketStatusMessages::SetPacketStatus(
-                id,
-                crate::actors::actions::status::PacketStatus {
+            |id, retry_count| {
+                crate::actors::actions::status::StatusOperationMessage::SetPacketStatus(
                     id,
-                    retry_count,
-                    payload: ()
-                }
-            ),
+                    crate::actors::actions::status::PacketStatus {
+                        id,
+                        retry_count,
+                        payload: (),
+                    },
+                )
+            },
             |status| status.is_some()
         );
     };
@@ -157,7 +159,7 @@ macro_rules! impl_send_packet_actor {
         impl actix::Handler<$message> for $name {
             type Result = ();
             fn handle(&mut self, msg: $message, ctx: &mut Self::Context) -> Self::Result {
-                log::info!(concat!("Handling message for ", stringify!($name)));
+                log::trace!(concat!("Handling message for ", stringify!($name)));
                 let packet_and_id_option = $create_packet_and_id_from_message(&msg);
                 if packet_and_id_option.is_none() {
                     return;

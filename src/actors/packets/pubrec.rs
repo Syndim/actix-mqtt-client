@@ -1,6 +1,6 @@
 use mqtt::packet::{PubrecPacket, PubrelPacket};
 
-use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::packets::{PacketMessage, PublishPacketStatus};
 
 fn get_retry_count_from_message(msg: &PacketMessage<PubrecPacket>) -> u16 {
@@ -31,7 +31,7 @@ impl_send_packet_actor!(
     get_retry_count_from_message,
     create_retry_message_from_message,
     create_packet_and_id_from_message,
-    |id, retry_count| PacketStatusMessages::SetPacketStatus(
+    |id, retry_count| StatusOperationMessage::SetPacketStatus(
         id,
         PacketStatus {
             id,

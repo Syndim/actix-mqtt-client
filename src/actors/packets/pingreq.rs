@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use actix::{Actor, Arbiter, AsyncContext, Context, Handler, Message, Recipient};
-use log::{error, info, trace};
+use log::{error, trace};
 use mqtt::packet::PingreqPacket;
 
-use crate::actors::actions::status::PacketStatusMessages;
+use crate::actors::actions::status::{StatusExistenceMessage, StatusOperationMessage};
 use crate::actors::{ErrorMessage, StopMessage};
 
 use super::handle_mailbox_error_with_resend;
@@ -19,8 +19,8 @@ pub struct Pingreq(pub u16);
 struct SendPing(pub u16);
 
 pub struct PingreqActor {
-    status_recipient: Recipient<PacketStatusMessages<()>>,
-    connect_status_recipient: Recipient<PacketStatusMessages<()>>,
+    status_recipient: Recipient<StatusOperationMessage<()>>,
+    connect_status_recipient: Recipient<StatusExistenceMessage>,
     send_recipient: Recipient<VariablePacketMessage>,
     error_recipient: Recipient<ErrorMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -29,8 +29,8 @@ pub struct PingreqActor {
 
 impl PingreqActor {
     pub fn new(
-        status_recipient: Recipient<PacketStatusMessages<()>>,
-        connect_status_recipient: Recipient<PacketStatusMessages<()>>,
+        status_recipient: Recipient<StatusOperationMessage<()>>,
+        connect_status_recipient: Recipient<StatusExistenceMessage>,
         send_recipient: Recipient<VariablePacketMessage>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
@@ -79,11 +79,11 @@ impl Handler<Pingreq> for PingreqActor {
             //      status message with id = 0 indicating the connecing status
             //      status message with id = 1 indicating the connected status
             let connect_status_result = connect_status_recipient
-                .send(PacketStatusMessages::GetPacketStatus(1))
+                .send(StatusExistenceMessage(1u16))
                 .await;
             match connect_status_result {
-                Ok(None) => {
-                    info!("Server not connected yet, do nothing.");
+                Ok(false) => {
+                    trace!("Server not connected yet, do nothing.");
                     return;
                 }
                 Err(e) => {
@@ -91,12 +91,12 @@ impl Handler<Pingreq> for PingreqActor {
                     return;
                 }
                 _ => {
-                    info!("Server connected, will send ping");
+                    trace!("Server connected, will send ping");
                 }
             }
 
             let status_result = status_recipient
-                .send(PacketStatusMessages::GetPacketStatus(0))
+                .send(StatusOperationMessage::GetAndRemovePacketStatus(0))
                 .await;
             match status_result {
                 Ok(status) => {

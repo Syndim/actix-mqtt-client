@@ -4,7 +4,7 @@ use actix::{Arbiter, AsyncContext, Handler, Message, Recipient};
 use log::trace;
 use mqtt::packet::{ConnectPacket, VariablePacket};
 
-use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::send_error;
 use crate::actors::{ErrorMessage, StopMessage};
 use crate::consts::{COMMAND_TIMEOUT, PROTOCOL_NAME};
@@ -21,7 +21,7 @@ pub struct Connect {
 
 pub struct ConnectActor {
     send_recipient: Recipient<VariablePacketMessage>,
-    status_recipient: Recipient<PacketStatusMessages<()>>,
+    status_recipient: Recipient<StatusOperationMessage<()>>,
     stop_recipient: Recipient<StopMessage>,
     error_recipient: Recipient<ErrorMessage>,
     client_name: String,
@@ -30,7 +30,7 @@ pub struct ConnectActor {
 impl ConnectActor {
     pub fn new(
         send_recipient: Recipient<VariablePacketMessage>,
-        status_recipient: Recipient<PacketStatusMessages<()>>,
+        status_recipient: Recipient<StatusOperationMessage<()>>,
         stop_recipient: Recipient<StopMessage>,
         error_recipient: Recipient<ErrorMessage>,
         client_name: String,
@@ -58,7 +58,7 @@ impl Handler<Connect> for ConnectActor {
         //      status message with id = 1 indicating the connected status
         if let Err(e) = self
             .status_recipient
-            .do_send(PacketStatusMessages::SetPacketStatus(
+            .do_send(StatusOperationMessage::SetPacketStatus(
                 0,
                 PacketStatus {
                     id: 0,
@@ -106,7 +106,7 @@ impl Handler<Connect> for ConnectActor {
             let status_recipient = actor.status_recipient.clone();
             let status_future = async move {
                 let status_result = status_recipient
-                    .send(PacketStatusMessages::GetPacketStatus(0))
+                    .send(StatusOperationMessage::GetAndRemovePacketStatus(0))
                     .await;
                 match status_result {
                     Ok(status) => {

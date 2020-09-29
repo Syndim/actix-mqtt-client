@@ -1,6 +1,6 @@
 use mqtt::packet::{PubcompPacket, PubrelPacket};
 
-use crate::actors::actions::status::PacketStatusMessages;
+use crate::actors::actions::status::StatusOperationMessage;
 use crate::actors::packets::{PacketMessage, PublishPacketStatus};
 
 fn get_retry_count_from_message(msg: &PacketMessage<PubrelPacket>) -> u16 {
@@ -31,7 +31,7 @@ impl_send_packet_actor!(
     get_retry_count_from_message,
     create_retry_message_from_message,
     create_packet_and_id_from_message,
-    |id, _| PacketStatusMessages::RemovePacketStatus(id),
+    |id, _| StatusOperationMessage::RemovePacketStatus(id),
     |status| {
         if let Some(s) = status {
             s.payload == PublishPacketStatus::PendingRel

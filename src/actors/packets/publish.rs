@@ -8,7 +8,7 @@ use mqtt::packet::{
 use mqtt::{QualityOfService, TopicName};
 use tokio::time::{delay_until, Instant};
 
-use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::utils;
 use crate::actors::{
     handle_mailbox_error_with_resend, handle_send_error, handle_send_error_with_resend,
@@ -72,7 +72,7 @@ fn create_packet_and_id_from_message(
 }
 
 pub struct SendPublishActor {
-    status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+    status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
     send_recipient: Recipient<VariablePacketMessage>,
     error_recipient: Recipient<ErrorMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -80,7 +80,7 @@ pub struct SendPublishActor {
 
 impl SendPublishActor {
     pub fn new(
-        status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+        status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
         send_recipient: Recipient<VariablePacketMessage>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
@@ -129,7 +129,7 @@ impl Handler<Publish> for SendPublishActor {
 
                 if let Err(e) =
                     self.status_recipient
-                        .try_send(PacketStatusMessages::SetPacketStatus(
+                        .try_send(StatusOperationMessage::SetPacketStatus(
                             id,
                             PacketStatus {
                                 id,
@@ -177,7 +177,7 @@ impl Handler<Publish> for SendPublishActor {
 
                 if let Err(e) =
                     self.status_recipient
-                        .try_send(PacketStatusMessages::SetPacketStatus(
+                        .try_send(StatusOperationMessage::SetPacketStatus(
                             id,
                             PacketStatus {
                                 id,
@@ -218,7 +218,7 @@ impl Handler<Publish> for SendPublishActor {
                     let status_recipient = actor.status_recipient.clone();
                     let status_future = async move {
                         let status_result = status_recipient
-                            .send(PacketStatusMessages::GetPacketStatus(id))
+                            .send(StatusOperationMessage::GetAndRemovePacketStatus(id))
                             .await;
                         match status_result {
                             Ok(status) => {
@@ -248,7 +248,7 @@ impl Handler<Publish> for SendPublishActor {
 }
 
 pub struct RecvPublishActor {
-    status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+    status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
     send_recipient: Recipient<VariablePacketMessage>,
     error_recipient: Recipient<ErrorMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -257,7 +257,7 @@ pub struct RecvPublishActor {
 
 impl RecvPublishActor {
     pub fn new(
-        status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+        status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
         send_recipient: Recipient<VariablePacketMessage>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
@@ -276,12 +276,12 @@ impl RecvPublishActor {
         id: u16,
         addr: Addr<Self>,
         resend_msg: PacketMessage<PublishPacket>,
-        status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+        status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
     ) {
         let status_result = status_recipient
-            .send(PacketStatusMessages::GetPacketStatus(id))
+            .send(StatusOperationMessage::GetAndRemovePacketStatus(id))
             .await;
         match status_result {
             Ok(status) => {
@@ -313,7 +313,7 @@ impl RecvPublishActor {
         id: u16,
         addr: Addr<Self>,
         resend_msg: PacketMessage<PublishPacket>,
-        status_recipient: Recipient<PacketStatusMessages<PublishPacketStatus>>,
+        status_recipient: Recipient<StatusOperationMessage<PublishPacketStatus>>,
         error_recipient: Recipient<ErrorMessage>,
         stop_recipient: Recipient<StopMessage>,
     ) {
@@ -352,7 +352,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                 };
                 if let Err(e) = self
                     .status_recipient
-                    .do_send(PacketStatusMessages::RemovePacketStatus(0))
+                    .do_send(StatusOperationMessage::RemovePacketStatus(0))
                 {
                     handle_send_error(
                         "RecvPublishActor:status_recipient",
@@ -426,7 +426,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                 let retry_count = msg.retry_count;
                 let status_future = async move {
                     let status_result = status_recipient
-                        .send(PacketStatusMessages::GetPacketStatus(id))
+                        .send(StatusOperationMessage::GetAndRemovePacketStatus(id))
                         .await;
                     match status_result {
                         Ok(status) => {
@@ -452,7 +452,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                             }
 
                             if let Err(e) =
-                                status_recipient.try_send(PacketStatusMessages::SetPacketStatus(
+                                status_recipient.try_send(StatusOperationMessage::SetPacketStatus(
                                     id,
                                     PacketStatus {
                                         id,

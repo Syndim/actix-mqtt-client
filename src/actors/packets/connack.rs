@@ -5,13 +5,13 @@ use log::trace;
 use mqtt::control::variable_header::ConnectReturnCode;
 use mqtt::packet::ConnackPacket;
 
-use crate::actors::actions::status::{PacketStatus, PacketStatusMessages};
+use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::{send_error, ErrorMessage, StopMessage};
 
 use super::PacketMessage;
 
 pub struct ConnackActor {
-    status_recipient: Recipient<PacketStatusMessages<()>>,
+    status_recipient: Recipient<StatusOperationMessage<()>>,
     error_recipient: Recipient<ErrorMessage>,
     connect_stop_recipient: Recipient<StopMessage>,
     stop_recipient: Recipient<StopMessage>,
@@ -19,7 +19,7 @@ pub struct ConnackActor {
 
 impl ConnackActor {
     pub fn new(
-        status_recipient: Recipient<PacketStatusMessages<()>>,
+        status_recipient: Recipient<StatusOperationMessage<()>>,
         error_recipient: Recipient<ErrorMessage>,
         connect_stop_recipient: Recipient<StopMessage>,
         stop_recipient: Recipient<StopMessage>,
@@ -46,7 +46,7 @@ impl Handler<PacketMessage<ConnackPacket>> for ConnackActor {
         trace!("Handle message for ConnackActor");
         if let Err(e) = self
             .status_recipient
-            .try_send(PacketStatusMessages::RemovePacketStatus(0))
+            .try_send(StatusOperationMessage::RemovePacketStatus(0))
         {
             send_error(
                 "ConnackActor::status_recipient",
@@ -63,7 +63,7 @@ impl Handler<PacketMessage<ConnackPacket>> for ConnackActor {
                 //      status message with id = 1 indicating the connected status
                 let _ = self
                     .status_recipient
-                    .do_send(PacketStatusMessages::SetPacketStatus(
+                    .do_send(StatusOperationMessage::SetPacketStatus(
                         1,
                         PacketStatus {
                             id: 1,

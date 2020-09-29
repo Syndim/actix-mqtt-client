@@ -4,9 +4,9 @@ use actix::{Handler, Message, Recipient};
 
 use crate::actors::packets::disconnect::PacketSendStatus;
 
-pub enum PacketStatusMessages<T> {
+pub enum StatusOperationMessage<T> {
     SetPacketStatus(u16, PacketStatus<T>),
-    GetPacketStatus(u16),
+    GetAndRemovePacketStatus(u16),
     RemovePacketStatus(u16),
 }
 
@@ -16,9 +16,13 @@ pub struct PacketStatus<T> {
     pub payload: T,
 }
 
-impl<T: 'static> Message for PacketStatusMessages<T> {
+impl<T: 'static> Message for StatusOperationMessage<T> {
     type Result = Option<PacketStatus<T>>;
 }
+
+#[derive(Message)]
+#[rtype(result = "bool")]
+pub struct StatusExistenceMessage(pub u16);
 
 pub struct PacketStatusActor<T> {
     name: &'static str,
@@ -42,22 +46,29 @@ impl<T> PacketStatusActor<T> {
 impl_generic_empty_actor!(PacketStatusActor);
 impl_generic_stop_handler!(PacketStatusActor);
 
-impl<T: Unpin + 'static> Handler<PacketStatusMessages<T>> for PacketStatusActor<T> {
+impl<T: Unpin + 'static> Handler<StatusExistenceMessage> for PacketStatusActor<T> {
+    type Result = bool;
+    fn handle(&mut self, msg: StatusExistenceMessage, _: &mut Self::Context) -> Self::Result {
+        self.packet_status_map.contains_key(&msg.0)
+    }
+}
+
+impl<T: Unpin + 'static> Handler<StatusOperationMessage<T>> for PacketStatusActor<T> {
     type Result = Option<PacketStatus<T>>;
-    fn handle(&mut self, msg: PacketStatusMessages<T>, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: StatusOperationMessage<T>, _: &mut Self::Context) -> Self::Result {
         let result = match msg {
-            PacketStatusMessages::SetPacketStatus(id, status) => {
+            StatusOperationMessage::SetPacketStatus(id, status) => {
                 self.packet_status_map.insert(id, status);
                 None
             }
-            PacketStatusMessages::GetPacketStatus(id) => {
+            StatusOperationMessage::GetAndRemovePacketStatus(id) => {
                 if self.packet_status_map.contains_key(&id) {
                     self.packet_status_map.remove(&id)
                 } else {
                     None
                 }
             }
-            PacketStatusMessages::RemovePacketStatus(id) => {
+            StatusOperationMessage::RemovePacketStatus(id) => {
                 self.packet_status_map.remove(&id);
                 None
             }
