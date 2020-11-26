@@ -6,7 +6,7 @@ use mqtt::packet::{
     Packet, PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
 };
 use mqtt::{QualityOfService, TopicName};
-use tokio::time::{delay_until, Instant};
+use tokio::time::{sleep_until, Instant};
 
 use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::utils;
@@ -318,7 +318,7 @@ impl RecvPublishActor {
         stop_recipient: Recipient<StopMessage>,
     ) {
         let command_deadline = Instant::now() + COMMAND_TIMEOUT.clone();
-        delay_until(command_deadline).await;
+        sleep_until(command_deadline).await;
         Arbiter::spawn(Self::check_status_phase_2(
             id,
             addr,

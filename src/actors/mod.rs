@@ -12,7 +12,7 @@ use actix::dev::ToEnvelope;
 use actix::prelude::SendError;
 use actix::{Actor, Addr, Arbiter, Handler, MailboxError, Message, Recipient};
 use log::trace;
-use tokio::time::{delay_until, Instant};
+use tokio::time::{sleep_until, Instant};
 
 use crate::consts::RESEND_DELAY;
 
@@ -51,7 +51,7 @@ where
     trace!("Schedule resend message");
     let later_func = async move {
         let delay_time = Instant::now() + RESEND_DELAY.clone();
-        delay_until(delay_time).await;
+        sleep_until(delay_time).await;
         addr.do_send(msg);
     };
     Arbiter::spawn(later_func);
