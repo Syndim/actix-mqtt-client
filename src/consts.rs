@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use lazy_static::lazy_static;
 
-pub const PROTOCOL_NAME: &str = "MQTT";
 pub const MAX_RETRY_COUNT: u16 = 5;
 pub const DEFAULT_MAILBOX_CAPACITY: usize = 64;
 pub const MAILBOX_CAPACITY_FOR_PUBLISH: usize = 256;

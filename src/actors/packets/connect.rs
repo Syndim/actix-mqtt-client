@@ -7,7 +7,7 @@ use mqtt::packet::{ConnectPacket, VariablePacket};
 use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::send_error;
 use crate::actors::{ErrorMessage, StopMessage};
-use crate::consts::{COMMAND_TIMEOUT, PROTOCOL_NAME};
+use crate::consts::COMMAND_TIMEOUT;
 
 use super::VariablePacketMessage;
 
@@ -77,7 +77,7 @@ impl Handler<Connect> for ConnectActor {
             return;
         }
 
-        let mut packet = ConnectPacket::new(PROTOCOL_NAME, &self.client_name);
+        let mut packet = ConnectPacket::new(&self.client_name);
         packet.set_user_name(msg.user_name);
         packet.set_password(msg.password);
         if let Some(keep_alive) = msg.keep_alive {
@@ -134,7 +134,7 @@ impl Handler<Connect> for ConnectActor {
                     }
                 }
             };
-            Arbiter::spawn(status_future);
+            Arbiter::current().spawn(status_future);
         });
     }
 }

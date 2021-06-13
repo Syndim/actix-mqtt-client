@@ -82,7 +82,7 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
     TMessage::Result: Send,
     TActor::Context: ToEnvelope<TActor, TMessage>,
     TStatusPayload: Send,
-    TStatusCheckFunc: FnOnce(&Option<PacketStatus<TStatusPayload>>) -> bool + 'static,
+    TStatusCheckFunc: FnOnce(&Option<PacketStatus<TStatusPayload>>) -> bool + Send + 'static,
 {
     let error_recipient = error_recipient.clone();
     let stop_recipient = stop_recipient.clone();
@@ -118,7 +118,7 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
             }
         };
 
-        actix::Arbiter::spawn(status_future);
+        actix::Arbiter::current().spawn(status_future);
     });
 }
 

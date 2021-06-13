@@ -117,7 +117,7 @@ impl Handler<Pingreq> for PingreqActor {
                 }
             }
         };
-        Arbiter::spawn(status_future);
+        Arbiter::current().spawn(status_future);
     }
 }
 

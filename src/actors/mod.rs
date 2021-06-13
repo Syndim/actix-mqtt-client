@@ -54,7 +54,7 @@ where
         sleep_until(delay_time).await;
         addr.do_send(msg);
     };
-    Arbiter::spawn(later_func);
+    Arbiter::current().spawn(later_func);
 }
 
 fn handle_send_error<T>(
