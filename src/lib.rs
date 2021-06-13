@@ -183,97 +183,95 @@ mod tests {
         use std::str::FromStr;
         use std::time::Duration;
 
-        use actix::{Actor, Arbiter, System};
+        use actix::{Actor, System};
         use env_logger;
         use tokio::io::split;
         use tokio::net::TcpStream;
-        use tokio::time::{delay_until, Instant};
+        use tokio::time::{sleep_until, Instant};
 
         use crate::client::{MqttClient, MqttOptions};
 
         env_logger::init();
 
-        System::run(|| {
-            let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
-            let future = async move {
-                let result = async move {
-                    let stream = TcpStream::connect(socket_addr).await?;
-                    let (r, w) = split(stream);
-                    log::info!("TCP connected");
-                    let mut client = MqttClient::new(
-                        r,
-                        w,
-                        String::from("test"),
-                        MqttOptions::default(),
-                        MessageActor.start().recipient(),
-                        ErrorActor.start().recipient(),
-                        None,
-                    );
-                    client.connect().await?;
-                    while !client.is_connected().await.unwrap() {
-                        log::info!("Waiting for client to be connected");
-                        let delay_time = Instant::now() + Duration::new(0, 100);
-                        delay_until(delay_time).await;
-                    }
-
-                    log::info!("MQTT connected");
-                    log::info!("Subscribe");
-                    client
-                        .subscribe(String::from("test"), mqtt::QualityOfService::Level2)
-                        .await?;
-                    log::info!("Publish");
-                    client
-                        .publish(
-                            String::from("test"),
-                            mqtt::QualityOfService::Level0,
-                            Vec::from("test".as_bytes()),
-                        )
-                        .await?;
-                    log::info!("Wait for 1s");
-                    let delay_time = Instant::now() + Duration::new(1, 0);
-                    delay_until(delay_time).await;
-                    client
-                        .publish(
-                            String::from("test"),
-                            mqtt::QualityOfService::Level1,
-                            Vec::from("test2".as_bytes()),
-                        )
-                        .await?;
-                    log::info!("Wait for 1s");
-                    let delay_time = Instant::now() + Duration::new(1, 0);
-                    delay_until(delay_time).await;
-                    client
-                        .publish(
-                            String::from("test"),
-                            mqtt::QualityOfService::Level2,
-                            Vec::from("test3".as_bytes()),
-                        )
-                        .await?;
-                    log::info!("Wait for 1s");
-                    let delay_time = Instant::now() + Duration::new(1, 0);
-                    delay_until(delay_time).await;
-                    log::info!("Disconnect");
-                    client.disconnect(false).await?;
-                    log::info!("Check if disconnect is successful");
-                    for _ in 0..5 {
-                        if client.is_disconnected() {
-                            break;
-                        }
-
-                        let delay_time = Instant::now() + Duration::new(0, 200);
-                        delay_until(delay_time).await;
-                    }
-
-                    Ok(assert_eq!(true, client.is_disconnected())) as Result<(), IoError>
+        let sys = System::new();
+        let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
+        sys.block_on(async move {
+            let result = async move {
+                let stream = TcpStream::connect(socket_addr).await?;
+                let (r, w) = split(stream);
+                log::info!("TCP connected");
+                let mut client = MqttClient::new(
+                    r,
+                    w,
+                    String::from("test"),
+                    MqttOptions::default(),
+                    MessageActor.start().recipient(),
+                    ErrorActor.start().recipient(),
+                    None,
+                );
+                client.connect().await?;
+                while !client.is_connected().await.unwrap() {
+                    log::info!("Waiting for client to be connected");
+                    let delay_time = Instant::now() + Duration::new(0, 100);
+                    sleep_until(delay_time).await;
                 }
-                .await;
-                let r = result.unwrap();
-                System::current().stop();
-                r
-            };
-            Arbiter::spawn(future);
-        })
-        .unwrap();
+
+                log::info!("MQTT connected");
+                log::info!("Subscribe");
+                client
+                    .subscribe(String::from("test"), mqtt::QualityOfService::Level2)
+                    .await?;
+                log::info!("Publish");
+                client
+                    .publish(
+                        String::from("test"),
+                        mqtt::QualityOfService::Level0,
+                        Vec::from("test".as_bytes()),
+                    )
+                    .await?;
+                log::info!("Wait for 1s");
+                let delay_time = Instant::now() + Duration::new(1, 0);
+                sleep_until(delay_time).await;
+                client
+                    .publish(
+                        String::from("test"),
+                        mqtt::QualityOfService::Level1,
+                        Vec::from("test2".as_bytes()),
+                    )
+                    .await?;
+                log::info!("Wait for 1s");
+                let delay_time = Instant::now() + Duration::new(1, 0);
+                sleep_until(delay_time).await;
+                client
+                    .publish(
+                        String::from("test"),
+                        mqtt::QualityOfService::Level2,
+                        Vec::from("test3".as_bytes()),
+                    )
+                    .await?;
+                log::info!("Wait for 1s");
+                let delay_time = Instant::now() + Duration::new(1, 0);
+                sleep_until(delay_time).await;
+                log::info!("Disconnect");
+                client.disconnect(false).await?;
+                log::info!("Check if disconnect is successful");
+                for _ in (0 as i32)..5 {
+                    if client.is_disconnected() {
+                        break;
+                    }
+
+                    let delay_time = Instant::now() + Duration::new(0, 200);
+                    sleep_until(delay_time).await;
+                }
+
+                Ok(assert_eq!(true, client.is_disconnected())) as Result<(), IoError>
+            }
+            .await;
+            let r = result.unwrap();
+            System::current().stop();
+            r
+        });
+        sys.run().unwrap();
     }
 }
 
@@ -334,15 +332,18 @@ mod random_test {
         use futures::stream::StreamExt;
         use tokio::io::split;
         use tokio::net::TcpStream;
-        use tokio::time::{delay_until, Instant};
+        use tokio::time::{sleep_until, Instant};
+        use tokio_stream::wrappers::ReceiverStream;
 
         use crate::client::{MqttClient, MqttOptions};
 
         env_logger::init();
 
         let (sender, recv) = channel(100);
-        System::run(|| {
-            let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
+        let sys = System::new();
+        let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
+
+        sys.block_on(async move {
             let future = async move {
                 let result = async move {
                     let stream = TcpStream::connect(socket_addr).await?;
@@ -360,7 +361,7 @@ mod random_test {
                     while !client.is_connected().await.unwrap() {
                         log::info!("Waiting for client to be connected");
                         let delay_time = Instant::now() + Duration::new(0, 100);
-                        delay_until(delay_time).await;
+                        sleep_until(delay_time).await;
                     }
 
                     log::info!("Connected");
@@ -371,7 +372,7 @@ mod random_test {
                     async fn random_send(
                         client_id: i32,
                         client: MqttClient,
-                        mut sender: Sender<(bool, Vec<u8>)>,
+                        sender: Sender<(bool, Vec<u8>)>,
                     ) {
                         let mut count: i32 = 0;
                         loop {
@@ -381,7 +382,7 @@ mod random_test {
                             rand::thread_rng().fill_bytes(&mut data);
                             let payload = Vec::from(&data[..]);
                             log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
-                            delay_until(Instant::now() + Duration::from_millis(100)).await;
+                            sleep_until(Instant::now() + Duration::from_millis(100)).await;
                             sender.try_send((true, payload.clone())).unwrap();
                             client
                                 .publish(
@@ -398,7 +399,7 @@ mod random_test {
                         let client_clone = client.clone();
                         let sender_clone = sender.clone();
                         let future = random_send(i, client_clone, sender_clone);
-                        Arbiter::spawn(future);
+                        Arbiter::current().spawn(future);
                     }
 
                     Ok(()) as Result<(), IoError>
@@ -407,30 +408,31 @@ mod random_test {
                 result.unwrap();
             };
 
-            Arbiter::spawn(future);
+            Arbiter::current().spawn(future);
             let recv_future = async {
                 let result = async {
-                    recv.fold((), |_, (is_send, payload)| async move {
-                        let mut p = PACKETS.lock().unwrap();
-                        if is_send {
-                            p.insert(payload);
-                        } else if p.contains(&payload) {
-                            p.remove(&payload);
-                        }
+                    ReceiverStream::new(recv)
+                        .fold((), |_, (is_send, payload)| async move {
+                            let mut p = PACKETS.lock().unwrap();
+                            if is_send {
+                                p.insert(payload);
+                            } else if p.contains(&payload) {
+                                p.remove(&payload);
+                            }
 
-                        log::info!("Pending recv items: {}", p.len());
+                            log::info!("Pending recv items: {}", p.len());
 
-                        ()
-                    })
-                    .await;
+                            ()
+                        })
+                        .await;
                     Ok(()) as Result<(), IoError>
                 }
                 .await;
                 result.unwrap()
             };
-            Arbiter::spawn(recv_future);
-        })
-        .unwrap();
+            Arbiter::current().spawn(recv_future);
+        });
+        sys.run().unwrap();
     }
 
     #[test]
@@ -445,7 +447,8 @@ mod random_test {
         use futures::stream::StreamExt;
         use tokio::io::split;
         use tokio::net::TcpStream;
-        use tokio::time::{delay_until, Instant};
+        use tokio::time::{sleep_until, Instant};
+        use tokio_stream::wrappers::ReceiverStream;
 
         use crate::client::{MqttClient, MqttOptions};
 
@@ -469,7 +472,7 @@ mod random_test {
                 while !client.is_connected().await.unwrap() {
                     log::info!("Waiting for client to be connected");
                     let delay_time = Instant::now() + Duration::new(0, 100);
-                    delay_until(delay_time).await;
+                    sleep_until(delay_time).await;
                 }
                 log::info!("Connected");
                 log::info!("Subscribe");
@@ -479,7 +482,7 @@ mod random_test {
                 async fn random_send(
                     client_id: i32,
                     client: MqttClient,
-                    mut sender: Sender<(bool, Vec<u8>)>,
+                    sender: Sender<(bool, Vec<u8>)>,
                 ) {
                     let mut count: i32 = 0;
                     loop {
@@ -489,7 +492,7 @@ mod random_test {
                         rand::thread_rng().fill_bytes(&mut data);
                         let payload = Vec::from(&data[..]);
                         log::info!("[{}:{}] Publish {:?}", client_id, count, payload);
-                        delay_until(Instant::now() + Duration::from_millis(100)).await;
+                        sleep_until(Instant::now() + Duration::from_millis(100)).await;
                         sender.try_send((true, payload.clone())).unwrap();
                         client
                             .publish(
@@ -503,7 +506,7 @@ mod random_test {
                 }
 
                 let future = random_send(client_id, client, sender);
-                Arbiter::spawn(future);
+                Arbiter::current().spawn(future);
 
                 Ok(()) as Result<(), IoError>
             }
@@ -511,36 +514,37 @@ mod random_test {
             .unwrap();
         }
 
-        System::run(|| {
+        let sys = System::new();
+        sys.block_on(async move {
             let (sender, recv) = channel(100);
             for i in 0..5 {
                 let future = test_send(i, sender.clone());
-                Arbiter::spawn(future);
+                Arbiter::current().spawn(future);
             }
 
             let recv_future = async {
                 let result = async {
-                    recv.fold((), |_, (is_send, payload)| async move {
-                        let mut p = PACKETS.lock().unwrap();
-                        if is_send {
-                            p.insert(payload);
-                        } else if p.contains(&payload) {
-                            p.remove(&payload);
-                        }
+                    ReceiverStream::new(recv)
+                        .fold((), |_, (is_send, payload)| async move {
+                            let mut p = PACKETS.lock().unwrap();
+                            if is_send {
+                                p.insert(payload);
+                            } else if p.contains(&payload) {
+                                p.remove(&payload);
+                            }
 
-                        log::info!("Pending recv items: {}", p.len());
+                            log::info!("Pending recv items: {}", p.len());
 
-                        ()
-                    })
-                    .await;
+                            ()
+                        })
+                        .await;
                     Ok(()) as Result<(), IoError>
                 }
                 .await;
                 result.unwrap()
             };
-            Arbiter::spawn(recv_future);
-        })
-        .unwrap();
+            Arbiter::current().spawn(recv_future);
+        });
     }
 
     #[test]
@@ -555,7 +559,8 @@ mod random_test {
         use futures::stream::StreamExt;
         use tokio::io::split;
         use tokio::net::TcpStream;
-        use tokio::time::{delay_until, Instant};
+        use tokio::time::{sleep_until, Instant};
+        use tokio_stream::wrappers::ReceiverStream;
 
         use crate::client::{MqttClient, MqttOptions};
 
@@ -564,7 +569,8 @@ mod random_test {
         let (sender, recv) = channel(100);
         let sender_clone = sender.clone();
 
-        System::run(|| {
+        let sys = System::new();
+        sys.block_on(async move {
             let socket_addr = SocketAddr::from_str("127.0.0.1:1883").unwrap();
             let future = async move {
                 let result = async move {
@@ -583,7 +589,7 @@ mod random_test {
                     while !client.is_connected().await.unwrap() {
                         log::info!("Waiting for client to be connected");
                         let delay_time = Instant::now() + Duration::new(0, 100);
-                        delay_until(delay_time).await;
+                        sleep_until(delay_time).await;
                     }
                     log::info!("Connected");
                     log::info!("Subscribe");
@@ -591,13 +597,13 @@ mod random_test {
                         .subscribe(String::from("test"), mqtt::QualityOfService::Level2)
                         .await?;
                     futures::stream::repeat(())
-                        .fold((client, sender_clone), |(client, mut sender), _| async {
+                        .fold((client, sender_clone), |(client, sender), _| async {
                             use rand::RngCore;
                             let mut data = [0u8; 32];
                             rand::thread_rng().fill_bytes(&mut data);
                             let payload = Vec::from(&data[..]);
                             log::info!("Publish {:?}", payload);
-                            delay_until(Instant::now() + Duration::from_millis(10)).await;
+                            sleep_until(Instant::now() + Duration::from_millis(10)).await;
                             sender.try_send((true, payload.clone())).unwrap();
                             client
                                 .publish(
@@ -615,31 +621,32 @@ mod random_test {
                 .await;
                 result.unwrap()
             };
-            Arbiter::spawn(future);
+            Arbiter::current().spawn(future);
             let recv_future = async {
                 let result = async {
-                    recv.fold((), |_, (is_send, payload)| async move {
-                        let mut p = PACKETS.lock().unwrap();
-                        if is_send {
-                            p.insert(payload);
-                        } else if !p.contains(&payload) {
-                            panic!("Multiple receive for level 2: {:?}", payload);
-                        } else {
-                            p.remove(&payload);
-                        }
+                    ReceiverStream::new(recv)
+                        .fold((), |_, (is_send, payload)| async move {
+                            let mut p = PACKETS.lock().unwrap();
+                            if is_send {
+                                p.insert(payload);
+                            } else if !p.contains(&payload) {
+                                panic!("Multiple receive for level 2: {:?}", payload);
+                            } else {
+                                p.remove(&payload);
+                            }
 
-                        log::info!("Pending recv items: {}", p.len());
+                            log::info!("Pending recv items: {}", p.len());
 
-                        ()
-                    })
-                    .await;
+                            ()
+                        })
+                        .await;
                     Ok(()) as Result<(), IoError>
                 }
                 .await;
                 result.unwrap()
             };
-            Arbiter::spawn(recv_future);
-        })
-        .unwrap();
+            Arbiter::current().spawn(recv_future);
+        });
+        sys.run().unwrap();
     }
 }

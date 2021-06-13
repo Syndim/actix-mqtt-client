@@ -3,10 +3,10 @@ use std::io::ErrorKind;
 use actix::{Addr, Arbiter, AsyncContext, Handler, MailboxError, Message, Recipient};
 use log::{debug, trace};
 use mqtt::packet::{
-    Packet, PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
+    PubackPacket, PublishPacket, PubrecPacket, QoSWithPacketIdentifier, VariablePacket,
 };
 use mqtt::{QualityOfService, TopicName};
-use tokio::time::{delay_until, Instant};
+use tokio::time::{sleep_until, Instant};
 
 use crate::actors::actions::status::{PacketStatus, StatusOperationMessage};
 use crate::actors::utils;
@@ -240,7 +240,7 @@ impl Handler<Publish> for SendPublishActor {
                             }
                         }
                     };
-                    Arbiter::spawn(status_future);
+                    Arbiter::current().spawn(status_future);
                 });
             }
         }
@@ -318,8 +318,8 @@ impl RecvPublishActor {
         stop_recipient: Recipient<StopMessage>,
     ) {
         let command_deadline = Instant::now() + COMMAND_TIMEOUT.clone();
-        delay_until(command_deadline).await;
-        Arbiter::spawn(Self::check_status_phase_2(
+        sleep_until(command_deadline).await;
+        Arbiter::current().spawn(Self::check_status_phase_2(
             id,
             addr,
             resend_msg,
@@ -348,7 +348,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                 let publish_message = PublishMessage {
                     id: 0,
                     topic_name: String::from(packet.topic_name()),
-                    payload: msg.packet.payload(),
+                    payload: Vec::from(msg.packet.payload()),
                 };
                 if let Err(e) = self
                     .status_recipient
@@ -395,7 +395,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                 let publish_message = PublishMessage {
                     id,
                     topic_name: String::from(packet.topic_name()),
-                    payload: msg.packet.payload(),
+                    payload: Vec::from(msg.packet.payload()),
                 };
                 if let Err(e) = self.remote_message_recipient.try_send(publish_message) {
                     handle_send_error_with_resend(
@@ -434,7 +434,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                                 let publish_message = PublishMessage {
                                     id,
                                     topic_name: String::from(packet.topic_name()),
-                                    payload: packet.payload(),
+                                    payload: Vec::from(packet.payload()),
                                 };
                                 if let Err(e) = remote_message_recipient.try_send(publish_message) {
                                     let mut resend_msg_for_publish = resend_msg;
@@ -491,7 +491,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                                 return;
                             }
 
-                            Arbiter::spawn(Self::delayed_resend(
+                            Arbiter::current().spawn(Self::delayed_resend(
                                 id,
                                 addr,
                                 resend_msg,
@@ -512,7 +512,7 @@ impl Handler<PacketMessage<PublishPacket>> for RecvPublishActor {
                         }
                     }
                 };
-                Arbiter::spawn(status_future);
+                Arbiter::current().spawn(status_future);
             }
         }
     }
