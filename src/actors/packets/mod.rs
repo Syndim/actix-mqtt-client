@@ -81,7 +81,7 @@ fn schedule_status_check<TActor, TMessage, TStatusPayload, TStatusCheckFunc>(
     TMessage: Message + Send + 'static + Clone,
     TMessage::Result: Send,
     TActor::Context: ToEnvelope<TActor, TMessage>,
-    TStatusPayload: Send,
+    TStatusPayload: Send + 'static,
     TStatusCheckFunc: FnOnce(&Option<PacketStatus<TStatusPayload>>) -> bool + Send + 'static,
 {
     let error_recipient = error_recipient.clone();
@@ -136,7 +136,7 @@ where
     TMessage: Message + Send + 'static,
     TMessage::Result: Send,
     TActor::Context: ToEnvelope<TActor, TMessage>,
-    TStatusPayload: Send,
+    TStatusPayload: Send + 'static,
 {
     if let Err(e) = status_recipient.try_send(status_message) {
         let addr = ctx.address();
@@ -161,7 +161,7 @@ where
     TMessage: Message + Send + 'static,
     TMessage::Result: Send,
     TActor::Context: ToEnvelope<TActor, TMessage>,
-    TStatusPayload: Send,
+    TStatusPayload: Send + 'static,
 {
     if let Err(e) = status_recipient.try_send(StatusOperationMessage::RemovePacketStatus(id)) {
         let addr = ctx.address();
